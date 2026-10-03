@@ -1,0 +1,8 @@
+root = true
+
+[*.{sh,bash}]
+indent_style = space
+indent_size = 2
+# Keep the pinned Bash language server and shfmt aligned.
+shell_variant = bash
+switch_case_indent = true

@@ -1,0 +1,73 @@
+--- a/src/monitors.rs
++++ b/src/monitors.rs
+@@ -12 +12 @@
+-use std::process::Command;
++use std::process::{Command, Output};
+@@ -65,0 +66,5 @@
++fn hyprland_reply_ok(output: &Output) -> bool {
++    // hyprctl returns zero for successful IPC transport, even if Lua failed.
++    output.status.success() && String::from_utf8_lossy(&output.stdout).trim() == "ok"
++}
++
+@@ -67,8 +72,7 @@
+-    // Empty monitor name → applies to the first / current output, which is
+-    // what SPICE guests have. Using @60 is fine for virtual outputs.
+-    let arg = format!(",{width}x{height}@60,0x0,1");
+-    match Command::new("hyprctl")
+-        .args(["keyword", "monitor", &arg])
+-        .status()
+-    {
+-        Ok(s) if s.success() => {
++    // Hyprland 0.55+ with Lua rejects the legacy `keyword monitor` command.
++    // Numeric dimensions come from the SPICE message, not arbitrary Lua input.
++    let arg = format!(
++        r#"hl.monitor({{output = "", mode = "{width}x{height}@60", position = "0x0", scale = 1}})"#
++    );
++    match Command::new("hyprctl").args(["eval", &arg]).output() {
++        Ok(output) if hyprland_reply_ok(&output) => {
+@@ -78,2 +82,7 @@
+-        Ok(s) => {
+-            eprintln!("wayland-vdagent: hyprctl exited with {s}");
++        Ok(output) => {
++            eprintln!(
++                "wayland-vdagent: hyprctl resize failed ({}): {} {}",
++                output.status,
++                String::from_utf8_lossy(&output.stdout).trim(),
++                String::from_utf8_lossy(&output.stderr).trim()
++            );
+@@ -85,0 +95,35 @@
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::os::unix::process::ExitStatusExt;
++    use std::process::ExitStatus;
++
++    fn reply(status: i32, text: &str) -> Output {
++        Output {
++            status: ExitStatus::from_raw(status << 8),
++            stdout: text.as_bytes().to_vec(),
++            stderr: vec![],
++        }
++    }
++
++    #[test]
++    fn accepts_acknowledged_resize() {
++        assert!(hyprland_reply_ok(&reply(0, "ok\n")));
++    }
++
++    #[test]
++    fn rejects_lua_error_even_when_ipc_exits_zero() {
++        assert!(!hyprland_reply_ok(&reply(0, "error: invalid monitor mode")));
++        assert!(!hyprland_reply_ok(&reply(
++            0,
++            "keyword can't work with non-legacy parsers. Use eval."
++        )));
++    }
++
++    #[test]
++    fn rejects_transport_failure_or_missing_ack() {
++        assert!(!hyprland_reply_ok(&reply(1, "ok")));
++        assert!(!hyprland_reply_ok(&reply(0, "")));

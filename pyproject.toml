@@ -1,0 +1,32 @@
+[project]
+name = "personal-distro"
+version = "0.1.0"
+description = "Development tools for the NixOS configuration scripts."
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "RUF", "ANN"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pyrefly]
+project-includes = ["**/*.py", "**/*.pyi"]
+python-version = "3.13"
+python-platform = "linux"
+preset = "strict"
+
+[dependency-groups]
+dev = [
+    "pyrefly>=1.3.2,<2",
+    "ruff>=0.16.10,<0.17",
+]

@@ -1,0 +1,10 @@
+/isos/
+/vm/
+/result
+/result-*
+*.backup
+ref/
+.venv/
+.ruff_cache/
+__pycache__/
+*.py[cod]
