@@ -15,8 +15,9 @@ with Home Manager and Serpantinum for user `razor`.
 ## Language and style
 
 Use English for filenames, identifiers, comments, docstrings, logs, error messages,
-`AGENTS.md` and other contributor documentation. Use Spanish only for end-user
-UI and documentation; developer commands and diagnostics remain English.
+`AGENTS.md` and other contributor documentation. Use Spanish for end-user UI,
+end-user documentation and commit messages; developer commands and diagnostics
+remain English.
 
 - Nix/Bash: two spaces; lowercase hyphenated filenames. Python: four spaces,
   double quotes, snake_case and type annotations. QML: qmlformat defaults.
@@ -27,6 +28,14 @@ UI and documentation; developer commands and diagnostics remain English.
 - Comment non-obvious reasons and constraints, rather than restating the code.
 - Keep changes focused. Use pinned formatters/lints; review findings instead of
   suppressing them. Document relevant validation and any skipped checks in PRs.
+
+## Commit messages
+
+- Write commit subjects and bodies in clear, natural Spanish.
+- Use a concise subject that describes the concrete change. Avoid vague messages
+  and unnecessary jargon.
+- Add a body when needed to explain the reason for the change or relevant
+  validation. Keep filenames, identifiers and commands in their original form.
 
 ## Useful commands
 
