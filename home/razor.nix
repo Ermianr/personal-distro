@@ -40,6 +40,16 @@
   };
 
   programs = {
+    git = {
+      enable = true;
+      settings = {
+        init.defaultBranch = "main";
+        user = {
+          email = "ermianrazor@gmail.com";
+          name = "Kevin García Saldarriaga";
+        };
+      };
+    };
     fish = {
       enable = true;
       interactiveShellInit = ''
