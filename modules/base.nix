@@ -184,10 +184,43 @@ in
 
   environment.systemPackages = with pkgs; [
     nautilus
+    # GTK4/libadwaita viewers follow the dark adw-gtk3 desktop like Nautilus.
+    loupe
+    celluloid
     git
     bibata-cursors
     sddmAstronautTheme
   ];
+
+  # System defaults keep ~/.config/mimeapps.list writable for apps and user choices.
+  xdg.mime.defaultApplications =
+    lib.genAttrs [
+      "image/avif"
+      "image/bmp"
+      "image/gif"
+      "image/heic"
+      "image/jpeg"
+      "image/jxl"
+      "image/png"
+      "image/svg+xml"
+      "image/tiff"
+      "image/webp"
+      "image/vnd.microsoft.icon"
+    ] (_: "org.gnome.Loupe.desktop")
+    // lib.genAttrs [
+      "video/3gpp"
+      "video/mp2t"
+      "video/mp4"
+      "video/mpeg"
+      "video/ogg"
+      "video/quicktime"
+      "video/webm"
+      "video/x-flv"
+      "video/x-m4v"
+      "video/x-matroska"
+      "video/x-ms-wmv"
+      "video/x-msvideo"
+    ] (_: "io.github.celluloid_player.Celluloid.desktop");
 
   fonts.packages = with pkgs; [
     corefonts
