@@ -61,6 +61,17 @@ in
         '';
         unitConfig.RequiresMountsFor = [ config.users.users.razor.home ];
       };
+      # The NixOS module installs Flatpak without remotes; fast-moving apps come from Flathub.
+      flatpak-repo = {
+        wantedBy = [ "multi-user.target" ];
+        wants = [ "network-online.target" ];
+        after = [ "network-online.target" ];
+        serviceConfig.Type = "oneshot";
+        script = ''
+          ${config.services.flatpak.package}/bin/flatpak remote-add --system --if-not-exists \
+            flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+        '';
+      };
     };
     # NixOS passes the XKB layout only to Weston; KWin's greeter reads it from kxkbrc.
     tmpfiles.settings.sddm-keyboard = {
@@ -118,6 +129,7 @@ in
       defaultSession = "hyprland-uwsm";
     };
     gvfs.enable = true;
+    flatpak.enable = true;
     xserver.xkb.layout = "latam";
   };
 
