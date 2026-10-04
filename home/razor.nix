@@ -53,6 +53,7 @@
     fish = {
       enable = true;
       interactiveShellInit = ''
+        set -g fish_greeting
         fnm env --use-on-cd --shell fish | source
       '';
     };
