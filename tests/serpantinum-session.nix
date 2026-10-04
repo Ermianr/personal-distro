@@ -121,6 +121,7 @@ pkgs.testers.runNixOSTest {
   testScript = ''
     import base64
     import json
+    import re
     import shlex
     import subprocess
     from typing import Any
@@ -171,7 +172,11 @@ pkgs.testers.runNixOSTest {
         actual = active_border()
         assert actual == expected, {"actual": actual, "expected": expected}
         shadow = json.loads(machine.succeed(as_user("hyprctl -i 0 -j getoption decoration:shadow:color")))
-        expected_shadow = int("55" + colors["blue"].removeprefix("#"), 16)
+        # The status JSON lacks inverse_primary, so read the color matugen rendered for Hyprland.
+        hyprland_colors = machine.succeed("cat /home/razor/.local/state/serpantinum/hyprland-colors.lua")
+        shadow_rgb = re.search(r'color = "rgba\(([0-9a-fA-F]{6})10\)"', hyprland_colors)
+        assert shadow_rgb is not None, hyprland_colors
+        expected_shadow = int("10" + shadow_rgb.group(1), 16)
         assert shadow["int"] & 0xffffffff == expected_shadow, shadow
 
     def color_settings() -> dict:

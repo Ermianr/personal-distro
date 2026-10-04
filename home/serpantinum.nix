@@ -193,8 +193,7 @@ in
         },
         decoration = {
           shadow = {
-            color = "rgba({{colors.primary.default.hex_stripped}}55)",
-            color_inactive = "rgba({{colors.outline_variant.default.hex_stripped}}18)",
+            color = "rgba({{colors.inverse_primary.default.hex_stripped}}10)",
           },
         },
       })

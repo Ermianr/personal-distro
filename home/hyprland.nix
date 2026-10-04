@@ -33,16 +33,18 @@ in
       config = {
         general = {
           border_size = 1;
-          gaps_in = 4;
-          gaps_out = 6;
+          gaps_in = 5;
+          gaps_out = 10;
+          gaps_workspaces = 20;
           resize_on_border = true;
         };
         decoration = {
-          rounding = 12;
+          rounding = 15;
+          rounding_power = 2;
           shadow = {
             enabled = true;
-            range = 20;
-            render_power = 3;
+            range = 15;
+            render_power = 4;
           };
           blur = {
             enabled = true;
@@ -121,6 +123,9 @@ in
       hl.animation({ leaf = "border", enabled = true, speed = 6, bezier = "standard" })
       -- The overlay captures the live screen 200 ms after hiding; a fade-out would be captured.
       hl.layer_rule({ match = { namespace = "^qs-screenshot-overlay$" }, no_anim = true })
+      -- Caelestia widens the outer gap for a lone tiled or fullscreen window, outside special workspaces.
+      hl.workspace_rule({ workspace = "w[tv1]s[false]", gaps_out = 20 })
+      hl.workspace_rule({ workspace = "f[1]s[false]", gaps_out = 20 })
 
       local colors_path = ${builtins.toJSON "${config.xdg.stateHome}/serpantinum/hyprland-colors.lua"}
       local colors_file = io.open(colors_path, "r")
