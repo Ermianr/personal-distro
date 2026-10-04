@@ -128,6 +128,9 @@ in
   # Administration goes through sudo with razor's password. Mutable users keep an
   # existing root password, so installed systems also need `sudo passwd -l root`.
   users.users.root.hashedPassword = "!";
+  security.sudo.extraConfig = ''
+    Defaults pwfeedback
+  '';
 
   users.users.razor = {
     isNormalUser = true;
