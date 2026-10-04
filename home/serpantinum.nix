@@ -118,7 +118,8 @@ in
         # These flags control night light, not whether the monitor is turned on.
         enabled = false;
         auto = false;
-        scale = 1;
+        # Keep in sync with the Hyprland monitor scale, as the shell's display tab does.
+        scale = 1.2;
       };
     };
   };

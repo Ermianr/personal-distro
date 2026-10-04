@@ -27,7 +27,8 @@ in
         output = "";
         mode = "preferred";
         position = "auto";
-        scale = 1;
+        # 1.2 suits the 15.6-inch 1080p panel and divides it into whole logical pixels.
+        scale = 1.2;
       };
       config = {
         general = {
@@ -58,6 +59,8 @@ in
           disable_hyprland_logo = true;
           disable_splash_rendering = true;
         };
+        # Let XWayland apps render at native resolution instead of being upscaled blurry.
+        xwayland.force_zero_scaling = true;
       };
       bind = [
         (execBinding "SUPER + Return" "ghostty" { })

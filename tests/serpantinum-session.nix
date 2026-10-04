@@ -197,15 +197,20 @@ pkgs.testers.runNixOSTest {
         button_events["events"][0]["data"]["down"] = False
         machine.qmp_client.send("input-send-event", button_events)
 
+    def pixel_offset(width: int, x: float, y: float) -> int:
+        # Hyprland reports logical coordinates; captures use physical pixels.
+        scale = json.loads(machine.succeed(as_user("hyprctl -j monitors")))[0]["scale"]
+        return (round(y * scale) * width + round(x * scale)) * 3
+
     def color_samples(image: tuple[int, int, bytes] | None = None) -> list[tuple[int, ...]]:
         clients = json.loads(machine.succeed(as_user("hyprctl -j clients")))
         client = next(client for client in clients if client["title"] == "Muestras de color")
         width, _, pixels = framebuffer() if image is None else image
         samples = []
         for index in range(4):
-            x = client["at"][0] + round(client["size"][0] * (index + 0.5) / 4)
-            y = client["at"][1] + round(client["size"][1] / 2)
-            offset = (y * width + x) * 3
+            x = client["at"][0] + client["size"][0] * (index + 0.5) / 4
+            y = client["at"][1] + client["size"][1] / 2
+            offset = pixel_offset(width, x, y)
             samples.append(tuple(pixels[offset:offset + 3]))
         return samples
 
@@ -458,11 +463,17 @@ pkgs.testers.runNixOSTest {
             width, _, pixels = framebuffer()
             x = color_window["at"][0] + color_window["size"][0] - 12
             y = color_window["at"][1] + 80
-            offset = (y * width + x) * 3
+            offset = pixel_offset(width, x, y)
             return "#" + pixels[offset:offset + 3].hex()
 
         def assert_background(expected: str) -> None:
-            assert window_background() == expected.lower(), (window_background(), expected)
+            # Newly opened or restyled windows may need a few frames to settle.
+            for _ in range(10):
+                actual = window_background()
+                if actual == expected.lower():
+                    return
+                machine.sleep(1)
+            raise AssertionError((actual, expected))
 
         # Disable the screen filter before comparing exact rendered palette colors.
         machine.succeed(as_user(color_command + " --enabled false"))
