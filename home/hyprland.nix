@@ -116,6 +116,8 @@ in
       hl.animation({ leaf = "fade", enabled = true, speed = 6, bezier = "standard" })
       hl.animation({ leaf = "fadeDim", enabled = true, speed = 6, bezier = "standard" })
       hl.animation({ leaf = "border", enabled = true, speed = 6, bezier = "standard" })
+      -- The overlay captures the live screen 200 ms after hiding; a fade-out would be captured.
+      hl.layer_rule({ match = { namespace = "^qs-screenshot-overlay$" }, no_anim = true })
 
       local colors_path = ${builtins.toJSON "${config.xdg.stateHome}/serpantinum/hyprland-colors.lua"}
       local colors_file = io.open(colors_path, "r")
