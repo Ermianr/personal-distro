@@ -131,6 +131,9 @@
       music = "${config.home.homeDirectory}/Música";
       pictures = "${config.home.homeDirectory}/Imágenes";
       videos = "${config.home.homeDirectory}/Vídeos";
+      projects = null;
+      publicShare = null;
+      templates = null;
     };
   };
 }

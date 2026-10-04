@@ -59,6 +59,12 @@
           # Capture original pixels so the frozen overlay is filtered only when displayed.
           substituteInPlace src/scripts/screenshot.sh \
             --replace-fail 'grim ' '${displayColorsPackage}/bin/display-colors capture -- '
+          # The session does not export XDG_*_DIR, so read the configured user dirs.
+          substituteInPlace src/scripts/screenshot.sh \
+            --replace-fail '"''${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots"' \
+              '"''${XDG_PICTURES_DIR:-$(${pkgs.xdg-user-dirs}/bin/xdg-user-dir PICTURES)}/Capturas de pantalla"' \
+            --replace-fail '"''${XDG_VIDEOS_DIR:-$HOME/Videos}/Recordings"' \
+              '"''${XDG_VIDEOS_DIR:-$(${pkgs.xdg-user-dirs}/bin/xdg-user-dir VIDEOS)}/Grabaciones de pantalla"'
           substituteInPlace src/quickshell/screenshot/ScreenshotOverlay.qml \
             --replace-fail '["grim", ' '["${displayColorsPackage}/bin/display-colors", "capture", "--", '
         '';

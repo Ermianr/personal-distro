@@ -375,11 +375,11 @@ pkgs.testers.runNixOSTest {
         saved_colors = color_settings()
         for attempt in range(2):
             machine.succeed(as_user(
-                "XDG_PICTURES_DIR=\"$HOME/Imágenes\" serpantinum screenshot --full "
+                "serpantinum screenshot --full "
                 "> /tmp/serpantinum-color-capture.log 2>&1"
             ), timeout=30)
             capture_path = machine.succeed(
-                "ls -t /home/razor/Imágenes/Screenshots/Screenshot_*.png | head -n 1"
+                "ls -t /home/razor/Imágenes/Capturas\\ de\\ pantalla/Screenshot_*.png | head -n 1"
             ).strip()
             assert color_samples(captured_framebuffer(capture_path)) == baseline
             assert machine.succeed(as_user("hyprctl -j getoption decoration.screen_shader")) == active_shader
@@ -574,13 +574,16 @@ pkgs.testers.runNixOSTest {
         # A real screenshot must be saved and copied with all dependencies available.
         # The interactive notification must not keep the test output pipe open.
         machine.succeed(as_user(
-            "XDG_PICTURES_DIR=\"$HOME/Imágenes\" serpantinum screenshot --full "
+            "serpantinum screenshot --full "
             "> /tmp/serpantinum-screenshot.log 2>&1"
         ), timeout=30)
         machine.succeed(as_user(
-            "for screenshot in \"$HOME\"/Imágenes/Screenshots/Screenshot_*.png; do "
+            "for screenshot in \"$HOME/Imágenes/Capturas de pantalla\"/Screenshot_*.png; do "
             "test -s \"$screenshot\" || exit 1; done"
         ))
+        machine.succeed(as_user("test -d \"$HOME/Vídeos/Grabaciones de pantalla\""))
+        for directory in ("Pictures", "Videos", "Projects", "Public", "Templates"):
+            machine.fail(f"test -e /home/razor/{directory}")
         machine.succeed(as_user("wl-paste --type image/png > /tmp/serpantinum-screenshot.png"))
         machine.succeed("test -s /tmp/serpantinum-screenshot.png")
         machine.send_key("meta_l-q")
