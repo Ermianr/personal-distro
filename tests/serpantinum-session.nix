@@ -25,7 +25,7 @@ pkgs.testers.runNixOSTest {
       initialHashedPassword = lib.mkForce null;
       password = "serpantinumtest";
     };
-    # Seed existing settings to check that activation merges declared preferences.
+    # Seed existing settings to check that the first activation applies declared presets.
     systemd.tmpfiles.rules = [
       "d /home/razor/.config 0755 razor users - -"
       "d /home/razor/.config/serpantinum 0755 razor users - -"
@@ -248,6 +248,14 @@ pkgs.testers.runNixOSTest {
     assert settings()["notifications"]["dnd"] is False, settings()
     assert settings()["idle"]["actions"]["lock"]["timeout"] == 600, settings()
     assert settings()["wallpaperDir"] == "/home/razor/Imágenes/Fondos", settings()
+    # A preset changed on the machine must survive reactivation while Nix keeps its value.
+    machine.succeed("su razor -s /bin/sh -c " + shlex.quote(
+        "jq '.general.weatherInterval = 60' ~/.config/serpantinum/settings.json > ~/.config/serpantinum/settings.json.new"
+        " && mv ~/.config/serpantinum/settings.json.new ~/.config/serpantinum/settings.json"
+    ))
+    machine.succeed("systemctl restart home-manager-razor.service")
+    assert settings()["general"]["weatherInterval"] == 60, settings()
+    assert settings()["general"]["language"] == "es", settings()
     machine.succeed("test -f /home/razor/.local/state/serpantinum/first_launch.done")
     machine.wait_for_unit("display-manager.service")
     try:
@@ -534,7 +542,7 @@ pkgs.testers.runNixOSTest {
             "rm ~/.local/state/serpantinum/ghostty.conf"
         ))
         machine.succeed(as_user(
-            "jq '.general.language = \"en\" | .display.monitors[\"eDP-1\"].enabled = true | .display.monitors[\"eDP-1\"].auto = true | .customPreference = \"persist\"' "
+            "jq '.display.monitors[\"eDP-1\"].enabled = true | .display.monitors[\"eDP-1\"].auto = true | .customPreference = \"persist\"' "
             "~/.config/serpantinum/settings.json > /tmp/serpantinum-settings.json && "
             "mv /tmp/serpantinum-settings.json ~/.config/serpantinum/settings.json"
         ))
@@ -545,9 +553,10 @@ pkgs.testers.runNixOSTest {
         machine.succeed("/run/current-system/activate")
         machine.succeed("runuser -u sddm -- test -r /home/razor/Imágenes/Fondos/login.jpg")
         machine.fail("runuser -u sddm -- test -r /home/razor")
+        # Presets edited on the machine persist because their Nix values did not change.
         assert settings()["general"]["language"] == "es", settings()
-        assert settings()["display"]["monitors"]["eDP-1"]["enabled"] is False, settings()
-        assert settings()["display"]["monitors"]["eDP-1"]["auto"] is False, settings()
+        assert settings()["display"]["monitors"]["eDP-1"]["enabled"] is True, settings()
+        assert settings()["display"]["monitors"]["eDP-1"]["auto"] is True, settings()
         assert settings()["customPreference"] == "persist", settings()
         assert color_settings()["outputs"][output_name]["separation"] == 120
         assert color_settings()["outputs"][output_name]["saturation"] == 130

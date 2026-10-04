@@ -11,20 +11,39 @@ let
   managedSettings = (pkgs.formats.json { }).generate "serpantinum-managed-settings.json" (
     lib.filterAttrsRecursive (_: value: value != null) config.programs.serpantinum.settings
   );
+  # Declared settings are presets: each leaf is applied on the first activation, when it is
+  # missing, or when its Nix value changes; otherwise the value chosen in the shell UI wins.
   applySettings = pkgs.writeShellScript "serpantinum-apply-settings" ''
     set -euo pipefail
     settings_path="${config.xdg.configHome}/serpantinum/settings.json"
+    snapshot_path="${config.xdg.stateHome}/serpantinum/managed-settings.json"
     defaults="${serpantinumPackage}/share/serpantinum/config/serpantinum/settings.json"
     ${pkgs.jq}/bin/jq -se 'length == 1 and (.[0] | type == "object")' "$settings_path" >/dev/null
-    if ! ${pkgs.jq}/bin/jq -e --slurpfile defaults "$defaults" --slurpfile managed ${managedSettings} \
-      '. == ($defaults[0] * . * $managed[0])' "$settings_path" >/dev/null; then
-      settings_tmp=$(${pkgs.coreutils}/bin/mktemp "$settings_path.XXXXXX")
-      trap '${pkgs.coreutils}/bin/rm -f "$settings_tmp"' EXIT
-      ${pkgs.jq}/bin/jq --slurpfile defaults "$defaults" --slurpfile managed ${managedSettings} \
-        '$defaults[0] * . * $managed[0]' "$settings_path" > "$settings_tmp"
+    previous="null"
+    if [ -f "$snapshot_path" ]; then
+      previous=$(${pkgs.jq}/bin/jq -c 'if type == "object" then . else null end' "$snapshot_path")
+    fi
+    settings_tmp=$(${pkgs.coreutils}/bin/mktemp "$settings_path.XXXXXX")
+    trap '${pkgs.coreutils}/bin/rm -f "$settings_tmp"' EXIT
+    # Arrays such as bar modules are single values, so only objects are descended into.
+    ${pkgs.jq}/bin/jq --slurpfile defaults "$defaults" --slurpfile managed ${managedSettings} \
+      --argjson previous "$previous" '
+        def leaf_paths: if type == "object" then to_entries[] as $entry
+          | ($entry.value | leaf_paths) as $path | [$entry.key] + $path else [] end;
+        def value_at($path): try getpath($path) catch null;
+        reduce ($managed[0] | leaf_paths) as $path ($defaults[0] * .;
+          ($managed[0] | getpath($path)) as $value
+          | if $previous == null or ($previous | value_at($path)) != $value
+              or value_at($path) == null
+            then setpath($path; $value) else . end)
+      ' "$settings_path" > "$settings_tmp"
+    # Rewrite only on semantic changes to avoid needless writes to the watched file.
+    if ! ${pkgs.jq}/bin/jq -e --slurpfile current "$settings_path" '. == $current[0]' "$settings_tmp" >/dev/null; then
       ${pkgs.coreutils}/bin/chmod --reference="$settings_path" "$settings_tmp"
       ${pkgs.coreutils}/bin/mv "$settings_tmp" "$settings_path"
     fi
+    # Record the presets only after settings.json is updated, so a failure retries them.
+    ${pkgs.coreutils}/bin/install -D -m 0644 ${managedSettings} "$snapshot_path"
   '';
   prepareWallpaper = pkgs.writeShellScript "serpantinum-prepare-wallpaper" ''
     set -euo pipefail
