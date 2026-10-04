@@ -5,12 +5,14 @@
   boot.initrd.availableKernelModules = [
     "nvme"
     "xhci_pci"
+    "usb_storage"
+    "sd_mod"
     "rtsx_pci_sdmmc"
   ];
   boot.kernelModules = [ "kvm-amd" ];
 
   fileSystems."/" = {
-    device = "/dev/disk/by-uuid/afca1729-be6b-4ea1-9032-335df7a9062b";
+    device = "/dev/disk/by-uuid/65531188-7cf6-405a-8646-aadc8b9384bb";
     fsType = "ext4";
   };
 

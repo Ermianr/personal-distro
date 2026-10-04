@@ -30,6 +30,9 @@ La cuenta `razor` queda bloqueada inicialmente: establece su contraseña antes
 de reiniciar. En una instalación existente, aplica con
 `sudo nixos-rebuild switch --flake .#desktop`.
 
+Si Windows no aparece en GRUB tras instalar, repite ese último comando desde
+NixOS, con `/boot/efi` montado, para volver a ejecutar la detección automática.
+
 ## Uso
 
 `Super+Enter` abre Ghostty con Fish y el prompt de Starship para `razor`;
