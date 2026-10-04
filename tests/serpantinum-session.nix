@@ -265,6 +265,8 @@ pkgs.testers.runNixOSTest {
         machine.succeed("systemctl restart display-manager.service")
         machine.wait_for_text("teclado virtual", timeout=120)
         machine.succeed("runuser -u sddm -- test -r /home/razor/Imágenes/Fondos/login.jpg")
+        # KWin, unlike Weston, reads the greeter keyboard layout from kxkbrc.
+        machine.succeed("runuser -u sddm -- grep -qx LayoutList=latam /var/lib/sddm/.config/kxkbrc")
         machine.succeed("cmp /home/razor/Imágenes/Fondos/login.jpg ${../assets/wallpaper.jpg}")
         machine.sleep(2)
         assert login_background_samples() != initial_login_samples

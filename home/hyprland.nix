@@ -52,7 +52,7 @@ in
         };
         animations.enabled = true;
         input = {
-          kb_layout = "es";
+          kb_layout = "latam";
           touchpad.natural_scroll = true;
         };
         misc = {

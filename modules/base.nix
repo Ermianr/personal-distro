@@ -62,6 +62,21 @@ in
         unitConfig.RequiresMountsFor = [ config.users.users.razor.home ];
       };
     };
+    # NixOS passes the XKB layout only to Weston; KWin's greeter reads it from kxkbrc.
+    tmpfiles.settings.sddm-keyboard = {
+      "${config.users.users.sddm.home}/.config".d = {
+        user = "sddm";
+        group = "sddm";
+        mode = "0755";
+      };
+      "${config.users.users.sddm.home}/.config/kxkbrc"."L+".argument = toString (
+        pkgs.writeText "sddm-kxkbrc" ''
+          [Layout]
+          LayoutList=${config.services.xserver.xkb.layout}
+          Use=true
+        ''
+      );
+    };
   };
 
   networking.nameservers = [
@@ -101,12 +116,12 @@ in
       defaultSession = "hyprland-uwsm";
     };
     gvfs.enable = true;
-    xserver.xkb.layout = "es";
+    xserver.xkb.layout = "latam";
   };
 
   time.timeZone = "America/Bogota";
   i18n.defaultLocale = "es_ES.UTF-8";
-  console.keyMap = "es";
+  console.keyMap = "la-latin1";
 
   users.users.razor = {
     isNormalUser = true;
