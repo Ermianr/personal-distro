@@ -12,6 +12,14 @@
   # DC_DISABLE_CUSTOM_BRIGHTNESS_CURVE so brightness levels map directly.
   boot.kernelParams = [ "amdgpu.dcdebugmask=0x40000" ];
 
+  # An aborted hibernation leaves amdgpu unable to retrain eDP and crashes Hyprland.
+  # Disabling every disk-based sleep mode also greys out the shell's hibernate button.
+  systemd.sleep.settings.Sleep = {
+    AllowHibernation = "no";
+    AllowHybridSleep = "no";
+    AllowSuspendThenHibernate = "no";
+  };
+
   boot.loader = {
     efi = {
       canTouchEfiVariables = true;
