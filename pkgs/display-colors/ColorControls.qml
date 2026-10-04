@@ -15,7 +15,11 @@ ColumnLayout {
     readonly property string selectedOutput: selectedName
     property real separation: 100
     property real saturation: 100
-    property bool filterEnabled: true
+    property real red: 100
+    property real green: 100
+    property real blue: 100
+    property bool filterEnabled: false
+    property bool whiteBalanceEnabled: false
     property bool loaded: false
     property bool pending: false
     property string message: ""
@@ -24,7 +28,7 @@ ColumnLayout {
     function readStatus(text) {
         try {
             const data = JSON.parse(text);
-            if (!data || !Array.isArray(data.outputs) || !data.outputs.every(output => output && typeof output.name === "string" && typeof output.description === "string" && typeof output.enabled === "boolean" && Number.isFinite(output.separation) && output.separation >= 0 && output.separation <= 200 && Number.isFinite(output.saturation) && output.saturation >= 0 && output.saturation <= 200))
+            if (!data || !Array.isArray(data.outputs) || !data.outputs.every(output => output && typeof output.name === "string" && typeof output.description === "string" && typeof output.enabled === "boolean" && typeof output.white_balance_enabled === "boolean" && Number.isFinite(output.separation) && output.separation >= 0 && output.separation <= 200 && Number.isFinite(output.saturation) && output.saturation >= 0 && output.saturation <= 200 && ["red", "green", "blue"].every(channel => Number.isFinite(output[channel]) && output[channel] >= 0 && output[channel] <= 100)))
                 throw new Error("Invalid display color status");
             outputs = data.outputs;
             if (!pending && outputs.length && !outputs.some(output => output.name === selectedName))
@@ -34,7 +38,11 @@ ColumnLayout {
             if (selected && !pending) {
                 separation = selected.separation;
                 saturation = selected.saturation;
+                red = selected.red;
+                green = selected.green;
+                blue = selected.blue;
                 filterEnabled = selected.enabled;
+                whiteBalanceEnabled = selected.white_balance_enabled;
             }
             message = loaded ? "" : "No hay una pantalla conectada para ajustar.";
         } catch (error) {
@@ -51,7 +59,7 @@ ColumnLayout {
     }
 
     function setCommand() {
-        return [controllerCommand, "set", "--output", selectedOutput, "--separation", String(Math.round(separation)), "--saturation", String(Math.round(saturation)), "--enabled", String(filterEnabled)];
+        return [controllerCommand, "set", "--output", selectedOutput, "--separation", String(Math.round(separation)), "--saturation", String(Math.round(saturation)), "--red", String(Math.round(red)), "--green", String(Math.round(green)), "--blue", String(Math.round(blue)), "--enabled", String(filterEnabled), "--white-balance-enabled", String(whiteBalanceEnabled)];
     }
 
     function queueApply() {
@@ -146,7 +154,7 @@ ColumnLayout {
             font.weight: Font.DemiBold
         }
         Label {
-            text: "Ajusta la intensidad del color a tu manera, en cada pantalla."
+            text: "Ajusta la intensidad del color y corrige el balance de blanco en cada pantalla."
             color: root.theme.muted
             font.family: root.theme.fontFamily
             font.pixelSize: 13
@@ -207,70 +215,86 @@ ColumnLayout {
         }
     }
 
-    Rectangle {
-        Layout.fillWidth: true
-        implicitHeight: filterRow.implicitHeight + 32
-        radius: 14
-        color: root.theme.surface
-        RowLayout {
-            id: filterRow
-            anchors.fill: parent
-            anchors.margins: 16
-            spacing: 16
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 5
-                Label {
-                    text: "Filtro de color"
-                    color: root.theme.text
-                    font.family: root.theme.fontFamily
-                    font.pixelSize: 14
-                    font.weight: Font.Medium
-                }
-                Label {
-                    text: root.filterEnabled ? "Los ajustes se aplican en tiempo real." : "Desactivado. Tus valores se conservan."
-                    color: root.theme.muted
-                    font.family: root.theme.fontFamily
-                    font.pixelSize: 11
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
+    Repeater {
+        model: [
+            {
+                key: "filterEnabled",
+                title: "Realce de color",
+                description: "Aplica la separación de color y la saturación."
+            },
+            {
+                key: "whiteBalanceEnabled",
+                title: "Balance de blanco",
+                description: "Aplica los ajustes de los canales rojo, verde y azul."
             }
-            Switch {
-                id: filterSwitch
-                checked: root.filterEnabled
-                enabled: root.loaded
-                implicitWidth: 50
-                implicitHeight: 30
-                padding: 0
-                Accessible.name: "Activar filtro de color"
-                indicator: Rectangle {
+        ]
+        delegate: Rectangle {
+            id: filterControl
+            required property var modelData
+            Layout.fillWidth: true
+            implicitHeight: filterRow.implicitHeight + 32
+            radius: 14
+            color: root.theme.surface
+            RowLayout {
+                id: filterRow
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 16
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    Label {
+                        text: filterControl.modelData.title
+                        color: root.theme.text
+                        font.family: root.theme.fontFamily
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                    }
+                    Label {
+                        text: root[filterControl.modelData.key] ? filterControl.modelData.description : "Desactivado. Tus valores se conservan."
+                        color: root.theme.muted
+                        font.family: root.theme.fontFamily
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                }
+                Switch {
+                    id: filterSwitch
+                    checked: root[filterControl.modelData.key]
+                    enabled: root.loaded
                     implicitWidth: 50
-                    implicitHeight: 28
-                    x: (filterSwitch.width - width) / 2
-                    y: (filterSwitch.height - height) / 2
-                    radius: 14
-                    color: filterSwitch.checked ? root.theme.accent : root.theme.border
-                    opacity: filterSwitch.enabled ? 1 : 0.45
-                    border.width: filterSwitch.visualFocus ? 2 : 0
-                    border.color: root.theme.text
-                    Rectangle {
-                        width: 20
-                        height: 20
-                        x: filterSwitch.checked ? parent.width - width - 4 : 4
-                        y: 4
-                        radius: 10
-                        color: filterSwitch.checked ? root.theme.sidebar : root.theme.text
-                        Behavior on x {
-                            NumberAnimation {
-                                duration: 120
+                    implicitHeight: 30
+                    padding: 0
+                    Accessible.name: "Activar " + filterControl.modelData.title.toLowerCase()
+                    indicator: Rectangle {
+                        implicitWidth: 50
+                        implicitHeight: 28
+                        x: (filterSwitch.width - width) / 2
+                        y: (filterSwitch.height - height) / 2
+                        radius: 14
+                        color: filterSwitch.checked ? root.theme.accent : root.theme.border
+                        opacity: filterSwitch.enabled ? 1 : 0.45
+                        border.width: filterSwitch.visualFocus ? 2 : 0
+                        border.color: root.theme.text
+                        Rectangle {
+                            width: 20
+                            height: 20
+                            x: filterSwitch.checked ? parent.width - width - 4 : 4
+                            y: 4
+                            radius: 10
+                            color: filterSwitch.checked ? root.theme.sidebar : root.theme.text
+                            Behavior on x {
+                                NumberAnimation {
+                                    duration: 120
+                                }
                             }
                         }
                     }
-                }
-                onToggled: {
-                    root.filterEnabled = checked;
-                    root.queueApply();
+                    onToggled: {
+                        root[filterControl.modelData.key] = checked;
+                        root.queueApply();
+                    }
                 }
             }
         }
@@ -281,12 +305,32 @@ ColumnLayout {
             {
                 key: "separation",
                 title: "Separación de color",
-                description: "Amplifica las diferencias entre los canales de color."
+                description: "Amplifica las diferencias entre los canales de color.",
+                maximum: 200
             },
             {
                 key: "saturation",
                 title: "Saturación",
-                description: "Aumenta o suaviza la intensidad de los colores."
+                description: "Aumenta o suaviza la intensidad de los colores.",
+                maximum: 200
+            },
+            {
+                key: "red",
+                title: "Balance de blanco · rojo",
+                description: "Reduce el rojo si los blancos y grises se ven rojizos.",
+                maximum: 100
+            },
+            {
+                key: "green",
+                title: "Balance de blanco · verde",
+                description: "Reduce el verde si los blancos y grises se ven verdosos.",
+                maximum: 100
+            },
+            {
+                key: "blue",
+                title: "Balance de blanco · azul",
+                description: "Reduce el azul si los blancos y grises se ven azulados.",
+                maximum: 100
             }
         ]
         delegate: Rectangle {
@@ -334,7 +378,7 @@ ColumnLayout {
                     enabled: root.loaded
                     focus: colorControl.modelData.key === "separation"
                     from: 0
-                    to: 200
+                    to: colorControl.modelData.maximum
                     stepSize: 1
                     snapMode: Slider.SnapAlways
                     Accessible.name: colorControl.modelData.title
@@ -352,7 +396,7 @@ ColumnLayout {
                             color: root.theme.accent
                         }
                         Rectangle {
-                            x: (parent.width - width) / 2
+                            x: Math.min(parent.width - width, parent.width * 100 / valueSlider.to)
                             y: -2
                             width: 2
                             height: 10
@@ -383,7 +427,7 @@ ColumnLayout {
                 RowLayout {
                     Layout.fillWidth: true
                     Repeater {
-                        model: ["0 %", "100 % · Original", "200 %"]
+                        model: colorControl.modelData.maximum === 100 ? ["0 %", "100 % · Original"] : ["0 %", "100 % · Original", "200 %"]
                         Label {
                             required property string modelData
                             required property int index
@@ -391,7 +435,7 @@ ColumnLayout {
                             color: root.theme.muted
                             font.family: root.theme.fontFamily
                             font.pixelSize: 10
-                            horizontalAlignment: index === 0 ? Text.AlignLeft : (index === 1 ? Text.AlignHCenter : Text.AlignRight)
+                            horizontalAlignment: index === 0 ? Text.AlignLeft : (index === 1 && colorControl.modelData.maximum === 200 ? Text.AlignHCenter : Text.AlignRight)
                             Layout.fillWidth: true
                         }
                     }
@@ -413,12 +457,16 @@ ColumnLayout {
         }
         TweakButton {
             theme: root.theme
-            text: "Restablecer"
+            text: "Restablecer todo"
             enabled: root.loaded
             onClicked: {
                 root.separation = 100;
                 root.saturation = 100;
-                root.filterEnabled = true;
+                root.red = 100;
+                root.green = 100;
+                root.blue = 100;
+                root.filterEnabled = false;
+                root.whiteBalanceEnabled = false;
                 root.queueApply();
             }
         }

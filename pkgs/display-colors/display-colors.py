@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -19,7 +20,11 @@ from typing import TypedDict
 class OutputSettings(TypedDict):
     separation: float
     saturation: float
+    red: float
+    green: float
+    blue: float
     enabled: bool
+    white_balance_enabled: bool
 
 
 class Settings(TypedDict):
@@ -45,7 +50,11 @@ class Status(TypedDict):
 DEFAULT_VALUES: OutputSettings = {
     "separation": 100.0,
     "saturation": 100.0,
-    "enabled": True,
+    "red": 100.0,
+    "green": 100.0,
+    "blue": 100.0,
+    "enabled": False,
+    "white_balance_enabled": False,
 }
 
 
@@ -75,6 +84,13 @@ def percentage(value: str | int | float) -> float:
     return number
 
 
+def channel_gain(value: str | int | float) -> float:
+    number = percentage(value)
+    if number > 100:
+        raise ValueError("Channel gain must be between 0 and 100.")
+    return number
+
+
 def load_settings() -> Settings:
     path = config_dir() / "settings.json"
     if not path.exists():
@@ -92,20 +108,26 @@ def load_settings() -> Settings:
         if (
             not name
             or not isinstance(values, dict)
-            or not isinstance(values.get("enabled", True), bool)
+            or not isinstance(values.get("enabled", False), bool)
+            or not isinstance(values.get("white_balance_enabled", False), bool)
         ):
             raise ValueError(f"Invalid monitor settings: {name}")
         percentages = {}
-        for key in ("separation", "saturation"):
+        for key in ("separation", "saturation", "red", "green", "blue"):
             value = values.get(key, 100)
             if not isinstance(value, (int, float)) or isinstance(value, bool):
                 raise ValueError(f"Invalid {key} for monitor: {name}")
-            percentages[key] = percentage(value)
+            validator = channel_gain if key in ("red", "green", "blue") else percentage
+            percentages[key] = validator(value)
         # Copy known fields only so saved JSON cannot override monitor identity in status.
         settings["outputs"][name] = {
             "separation": percentages["separation"],
             "saturation": percentages["saturation"],
-            "enabled": values.get("enabled", True),
+            "red": percentages["red"],
+            "green": percentages["green"],
+            "blue": percentages["blue"],
+            "enabled": values.get("enabled", False),
+            "white_balance_enabled": values.get("white_balance_enabled", False),
         }
     return settings
 
@@ -174,14 +196,22 @@ def shader_source(settings: Settings, outputs: list[Monitor]) -> str | None:
     # Monitor IDs change after reconnects; resolve saved connector names on each apply.
     for output in outputs:
         values = settings["outputs"].get(output["name"], DEFAULT_VALUES)
-        if not values["enabled"] or (
-            values["separation"] == 100 and values["saturation"] == 100
+        separation = values["separation"] if values["enabled"] else 100
+        saturation = values["saturation"] if values["enabled"] else 100
+        white_balance = [
+            values[channel] if values["white_balance_enabled"] else 100
+            for channel in ("red", "green", "blue")
+        ]
+        if separation == saturation == 100 and all(
+            gain == 100 for gain in white_balance
         ):
             continue
+        gains = ", ".join(f"{gain / 100:.8f}" for gain in white_balance)
         branches.append(
             f"    if (wl_output == {output['id']}) {{\n"
-            f"        separation = {values['separation'] / 100:.8f};\n"
-            f"        saturation = {values['saturation'] / 100:.8f};\n"
+            f"        separation = {separation / 100:.8f};\n"
+            f"        saturation = {saturation / 100:.8f};\n"
+            f"        white_balance = vec3({gains});\n"
             "    }\n"
         )
     if not branches:
@@ -200,18 +230,21 @@ void main() {
     vec4 pixel = texture(tex, v_texcoord);
     float separation = 1.0;
     float saturation = 1.0;
+    vec3 white_balance = vec3(1.0);
 """
         + "".join(branches)
         + """    vec3 rgb = pixel.rgb;
+    // Match the standalone white-balance preview without an enhancement or clipping pass.
     if (separation == 1.0 && saturation == 1.0) {
-        fragColor = pixel;
+        fragColor = vec4(pixel.rgb * white_balance, pixel.a);
         return;
     }
     float average = (rgb.r + rgb.g + rgb.b) / 3.0;
     rgb = mix(vec3(average), rgb, separation);
     float luminance = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
     rgb = mix(vec3(luminance), rgb, saturation);
-    fragColor = vec4(clamp(rgb, 0.0, 1.0), pixel.a);
+    // Apply panel gains after clipping enhancement to retain the corrected white point.
+    fragColor = vec4(clamp(rgb, 0.0, 1.0) * white_balance, pixel.a);
 }
 """
     )
@@ -227,10 +260,7 @@ def apply_settings(settings: Settings, outputs: list[Monitor]) -> None:
         if not path.exists():
             atomic_write(path, source)
         shader_path = str(path)
-    option = json.loads(hyprctl("-j", "getoption", "decoration.screen_shader"))
-    if not isinstance(option, dict) or not isinstance(option.get("str"), str):
-        raise RuntimeError("Hyprland returned an invalid screen shader option.")
-    current = option["str"]
+    current = screen_shader()
     own_shader = current.startswith(str(directory / "colors-"))
     if current not in ("", "[[EMPTY]]") and not own_shader:
         if source is None:
@@ -238,20 +268,53 @@ def apply_settings(settings: Settings, outputs: list[Monitor]) -> None:
         raise RuntimeError(
             "Another screen shader is active. Disable it before adjusting display colors."
         )
-    lua = (
-        "hl.config({ decoration = { screen_shader = "
-        + json.dumps(shader_path, ensure_ascii=False)
-        + " } })\n"
-    )
     if current != shader_path and not (not shader_path and current == "[[EMPTY]]"):
-        # Lua changes the option; -r also recompiles the shader and repaints the screens.
-        result = hyprctl("-r", "eval", lua)
-        if result != "ok":
-            raise RuntimeError(f"Could not apply the filter: {result}")
+        set_screen_shader(shader_path)
     # Keep recent files because Hyprland loads the shader on the next frame.
     for old_path in directory.glob("colors-*.frag"):
         if str(old_path) != shader_path and time.time() - old_path.stat().st_mtime > 60:
             old_path.unlink(missing_ok=True)
+
+
+def screen_shader() -> str:
+    option = json.loads(hyprctl("-j", "getoption", "decoration.screen_shader"))
+    if not isinstance(option, dict) or not isinstance(option.get("str"), str):
+        raise RuntimeError("Hyprland returned an invalid screen shader option.")
+    return option["str"]
+
+
+def set_screen_shader(path: str, reload: bool = True) -> None:
+    lua = (
+        "hl.config({ decoration = { screen_shader = "
+        + json.dumps(path, ensure_ascii=False)
+        + " } })\n"
+    )
+    # Reloading recompiles the shader and repaints every output, but screencopy can
+    # return a fully transparent frame while it runs. Screencopy renders a fresh frame
+    # anyway, so captures change the option without reloading.
+    result = hyprctl(*(["-r"] if reload else []), "eval", lua)
+    if result != "ok":
+        raise RuntimeError(f"Could not apply the filter: {result}")
+
+
+def capture_screen(arguments: list[str]) -> int:
+    with settings_lock():
+        current = screen_shader()
+        if not current.startswith(str(state_dir() / "colors-")):
+            return subprocess.run(["grim", *arguments], check=False).returncode
+        # Frozen screenshots must contain original pixels: displaying them applies the
+        # screen filter again. Keep the watcher and UI from restoring it during capture.
+        handler = signal.signal(
+            signal.SIGTERM, lambda signum, _frame: sys.exit(128 + signum)
+        )
+        try:
+            set_screen_shader("", reload=False)
+            return subprocess.run(["grim", *arguments], check=False).returncode
+        finally:
+            try:
+                set_screen_shader(current)
+            finally:
+                signal.signal(signal.SIGTERM, handler)
 
 
 def status(settings: Settings, outputs: list[Monitor]) -> Status:
@@ -264,7 +327,11 @@ def status(settings: Settings, outputs: list[Monitor]) -> Status:
                 "description": output["description"],
                 "separation": values["separation"],
                 "saturation": values["saturation"],
+                "red": values["red"],
+                "green": values["green"],
+                "blue": values["blue"],
                 "enabled": values["enabled"],
+                "white_balance_enabled": values["white_balance_enabled"],
             }
         )
     return {"outputs": output_status}
@@ -314,7 +381,7 @@ def watch_session() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Ajusta la separación de color y la saturación por monitor."
+        description="Ajusta el realce de color y el balance de blanco por monitor."
     )
     parser._positionals.title = "órdenes"
     parser._optionals.title = "opciones"
@@ -323,6 +390,10 @@ def main() -> int:
     commands.add_parser("status", help="Consultar monitores y ajustes")
     commands.add_parser("apply", help="Restaurar el filtro guardado")
     commands.add_parser("watch", help="Restaurar el filtro al cambiar la sesión")
+    capture = commands.add_parser(
+        "capture", help="Capturar sin duplicar el filtro de color"
+    )
+    capture.add_argument("arguments", nargs=argparse.REMAINDER, help="Opciones de grim")
     setter = commands.add_parser(
         "set", help="Guardar y aplicar los ajustes de un monitor"
     )
@@ -334,8 +405,21 @@ def main() -> int:
         "--saturation", type=percentage, help="Saturación, de 0 a 200 %%"
     )
     setter.add_argument(
-        "--enabled", choices=("true", "false"), help="Activar o desactivar el filtro"
+        "--enabled",
+        choices=("true", "false"),
+        help="Activar o desactivar separación y saturación",
     )
+    setter.add_argument(
+        "--white-balance-enabled",
+        choices=("true", "false"),
+        help="Activar o desactivar el balance de blanco",
+    )
+    for channel, label in (("red", "rojo"), ("green", "verde"), ("blue", "azul")):
+        setter.add_argument(
+            f"--{channel}",
+            type=channel_gain,
+            help=f"Canal {label} del balance de blanco, de 0 a 100 %%",
+        )
     resetter = commands.add_parser("reset", help="Restablecer los colores neutros")
     resetter.add_argument("--output", required=True, help="Nombre del monitor")
     arguments = parser.parse_args()
@@ -347,6 +431,11 @@ def main() -> int:
         if arguments.command == "watch":
             watch_session()
             return 0
+        if arguments.command == "capture":
+            options = arguments.arguments
+            if options[:1] == ["--"]:
+                options = options[1:]
+            return capture_screen(options)
         with settings_lock():
             settings = load_settings()
             outputs = connected_outputs()
@@ -359,11 +448,15 @@ def main() -> int:
                 if arguments.command == "reset":
                     values = DEFAULT_VALUES.copy()
                 else:
-                    for key in ("separation", "saturation"):
+                    for key in ("separation", "saturation", "red", "green", "blue"):
                         if getattr(arguments, key) is not None:
                             values[key] = getattr(arguments, key)
                     if arguments.enabled is not None:
                         values["enabled"] = arguments.enabled == "true"
+                    if arguments.white_balance_enabled is not None:
+                        values["white_balance_enabled"] = (
+                            arguments.white_balance_enabled == "true"
+                        )
                 settings["outputs"][arguments.output] = values
                 apply_settings(settings, outputs)
                 atomic_write(

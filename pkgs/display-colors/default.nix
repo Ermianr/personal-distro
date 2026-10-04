@@ -6,6 +6,7 @@
   quickshell,
   qt6,
   hyprland,
+  grim,
 }:
 stdenvNoCC.mkDerivation {
   pname = "display-colors";
@@ -44,6 +45,7 @@ stdenvNoCC.mkDerivation {
       --prefix PATH : ${
         lib.makeBinPath [
           hyprland
+          grim
           quickshell
         ]
       } \

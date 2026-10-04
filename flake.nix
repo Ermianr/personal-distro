@@ -56,6 +56,11 @@
           # Pick a palette noninteractively when wallpapers are changed from the shell UI.
           substituteInPlace src/quickshell/wallpaper/WallpaperEngine.qml \
             --replace-fail 'matugen image ' 'matugen image --source-color-index 0 '
+          # Capture original pixels so the frozen overlay is filtered only when displayed.
+          substituteInPlace src/scripts/screenshot.sh \
+            --replace-fail 'grim ' '${displayColorsPackage}/bin/display-colors capture -- '
+          substituteInPlace src/quickshell/screenshot/ScreenshotOverlay.qml \
+            --replace-fail '["grim", ' '["${displayColorsPackage}/bin/display-colors", "capture", "--", '
         '';
       });
       homeCfg = {

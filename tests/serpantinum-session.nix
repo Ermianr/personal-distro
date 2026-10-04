@@ -76,6 +76,7 @@ pkgs.testers.runNixOSTest {
           ShellRoot {
             FloatingWindow {
               title: "Muestras de color"
+              color: "transparent"
               implicitWidth: 1000
               implicitHeight: 600
               visible: true
@@ -86,9 +87,12 @@ pkgs.testers.runNixOSTest {
                   model: ["#6080a0", "#a06080", "#a08060", "#707070"]
                   Rectangle {
                     required property string modelData
+                    required property int index
                     width: parent.width / 4
                     height: parent.height
                     color: modelData
+                    // Exercise translucent surfaces without changing the neutral gray patch.
+                    opacity: index < 2 ? 0.75 : 1
                   }
                 }
               }
@@ -115,8 +119,10 @@ pkgs.testers.runNixOSTest {
     };
   };
   testScript = ''
+    import base64
     import json
     import shlex
+    import subprocess
     from typing import Any
 
     def as_user(command: str) -> str:
@@ -135,6 +141,14 @@ pkgs.testers.runNixOSTest {
     def framebuffer() -> tuple[int, int, bytes]:
         with machine._managed_screenshot() as screenshot_path:
             magic, dimensions, maximum, pixels = screenshot_path.read_bytes().split(b"\n", 3)
+        assert magic == b"P6" and maximum == b"255", (magic, maximum)
+        width, height = map(int, dimensions.split())
+        return width, height, pixels
+
+    def captured_framebuffer(path: str) -> tuple[int, int, bytes]:
+        image = base64.b64decode(machine.succeed("base64 -w0 " + shlex.quote(path)))
+        ppm = subprocess.check_output(["pngtopnm", "-"], input=image)
+        magic, dimensions, maximum, pixels = ppm.split(b"\n", 3)
         assert magic == b"P6" and maximum == b"255", (magic, maximum)
         width, height = map(int, dimensions.split())
         return width, height, pixels
@@ -183,10 +197,10 @@ pkgs.testers.runNixOSTest {
         button_events["events"][0]["data"]["down"] = False
         machine.qmp_client.send("input-send-event", button_events)
 
-    def color_samples() -> list[tuple[int, ...]]:
+    def color_samples(image: tuple[int, int, bytes] | None = None) -> list[tuple[int, ...]]:
         clients = json.loads(machine.succeed(as_user("hyprctl -j clients")))
         client = next(client for client in clients if client["title"] == "Muestras de color")
-        width, _, pixels = framebuffer()
+        width, _, pixels = framebuffer() if image is None else image
         samples = []
         for index in range(4):
             x = client["at"][0] + round(client["size"][0] * (index + 0.5) / 4)
@@ -195,7 +209,7 @@ pkgs.testers.runNixOSTest {
             samples.append(tuple(pixels[offset:offset + 3]))
         return samples
 
-    def assert_color_effect(baseline: list[tuple[int, ...]], separation: float, saturation: float) -> None:
+    def assert_color_effect(baseline: list[tuple[int, ...]], separation: float, saturation: float, gains: tuple[float, float, float] = (1.0, 1.0, 1.0)) -> None:
         errors = machine.succeed(as_user("hyprctl configerrors")).strip()
         assert errors in ("", "ok"), errors
         actual = color_samples()
@@ -203,11 +217,12 @@ pkgs.testers.runNixOSTest {
             average = sum(original) / 3
             separated = [average + separation * (channel - average) for channel in original]
             luminance = sum(channel * weight for channel, weight in zip(separated, (0.2126, 0.7152, 0.0722)))
-            expected = [round(max(0, min(255, luminance + saturation * (channel - luminance)))) for channel in separated]
+            expected = [round(max(0, min(255, luminance + saturation * (channel - luminance))) * gain) for channel, gain in zip(separated, gains)]
             assert all(abs(channel - target) <= 4 for channel, target in zip(transformed, expected)), {
                 "original": original, "actual": transformed, "expected": expected,
             }
-        assert actual[-1] == baseline[-1], {"gray": actual[-1], "neutral_gray": baseline[-1]}
+        if gains == (1.0, 1.0, 1.0):
+            assert actual[-1] == baseline[-1], {"gray": actual[-1], "neutral_gray": baseline[-1]}
 
     terminal_command = "hyprctl -i 0 -j clients | jq -e 'any(.[]; .class == \"com.mitchellh.ghostty\")'"
     machine.start()
@@ -342,7 +357,7 @@ pkgs.testers.runNixOSTest {
         baseline = color_samples()
         assert baseline[0] != baseline[-1], baseline
         machine.screenshot("display-colors-neutral")
-        machine.succeed(as_user(color_command + " --separation 150 --saturation 100"))
+        machine.succeed(as_user(color_command + " --enabled true --separation 150 --saturation 100"))
         machine.sleep(1)
         assert_color_effect(baseline, 1.5, 1.0)
         machine.screenshot("display-colors-separation")
@@ -350,6 +365,48 @@ pkgs.testers.runNixOSTest {
         machine.sleep(1)
         assert_color_effect(baseline, 1.0, 1.5)
         machine.screenshot("display-colors-saturation")
+        # Panel correction follows clipping and remains active with enhancement disabled.
+        machine.succeed(as_user(color_command + " --separation 200 --saturation 200 --red 96 --green 99 --blue 98 --white-balance-enabled true"))
+        machine.sleep(1)
+        assert_color_effect(baseline, 2.0, 2.0, (0.96, 0.99, 0.98))
+        # Both saved captures and the frozen selector must contain original pixels,
+        # including after a previous capture has populated Hyprland's mirror buffer.
+        active_shader = machine.succeed(as_user("hyprctl -j getoption decoration.screen_shader"))
+        saved_colors = color_settings()
+        for attempt in range(2):
+            machine.succeed(as_user(
+                "XDG_PICTURES_DIR=\"$HOME/Imágenes\" serpantinum screenshot --full "
+                "> /tmp/serpantinum-color-capture.log 2>&1"
+            ), timeout=30)
+            capture_path = machine.succeed(
+                "ls -t /home/razor/Imágenes/Screenshots/Screenshot_*.png | head -n 1"
+            ).strip()
+            assert color_samples(captured_framebuffer(capture_path)) == baseline
+            assert machine.succeed(as_user("hyprctl -j getoption decoration.screen_shader")) == active_shader
+            assert color_settings() == saved_colors
+            assert_color_effect(baseline, 2.0, 2.0, (0.96, 0.99, 0.98))
+        machine.succeed(as_user("serpantinum screenshot"))
+        machine.sleep(1)
+        freeze_path = machine.succeed(
+            "ls -t /run/user/1000/serpantinum/screenshot/freeze_*.png | head -n 1"
+        ).strip()
+        assert color_samples(captured_framebuffer(freeze_path)) == baseline
+        machine.send_key("esc")
+        machine.sleep(1)
+        assert_color_effect(baseline, 2.0, 2.0, (0.96, 0.99, 0.98))
+        machine.succeed(as_user(color_command + " --enabled false"))
+        machine.succeed(as_user("hyprctl reload"))
+        machine.succeed(as_user("systemctl --user restart display-colors.service"))
+        machine.sleep(1)
+        assert_color_effect(baseline, 1.0, 1.0, (0.96, 0.99, 0.98))
+        machine.screenshot("display-colors-white-balance")
+        assert color_settings()["outputs"][output_name]["red"] == 96
+        machine.succeed(as_user(color_command + " --white-balance-enabled false"))
+        machine.sleep(1)
+        assert_color_effect(baseline, 1.0, 1.0)
+        assert json.loads(machine.succeed(as_user("hyprctl -j getoption decoration.screen_shader")))["str"] in ("", "[[EMPTY]]")
+        assert color_settings()["outputs"][output_name]["red"] == 96
+        machine.succeed(as_user(color_command + " --enabled true --red 100 --green 100 --blue 100"))
         machine.succeed(as_user(color_command + " --separation 120 --saturation 130"))
         machine.succeed(as_user("hyprctl reload"))
         machine.sleep(1)
@@ -459,7 +516,7 @@ pkgs.testers.runNixOSTest {
             "rm ~/.local/state/serpantinum/ghostty.conf"
         ))
         machine.succeed(as_user(
-            "jq '.general.language = \"en\" | .customPreference = \"persist\"' "
+            "jq '.general.language = \"en\" | .display.monitors[\"eDP-1\"].enabled = true | .display.monitors[\"eDP-1\"].auto = true | .customPreference = \"persist\"' "
             "~/.config/serpantinum/settings.json > /tmp/serpantinum-settings.json && "
             "mv /tmp/serpantinum-settings.json ~/.config/serpantinum/settings.json"
         ))
@@ -471,6 +528,8 @@ pkgs.testers.runNixOSTest {
         machine.succeed("runuser -u sddm -- test -r /home/razor/Imágenes/Fondos/login.jpg")
         machine.fail("runuser -u sddm -- test -r /home/razor")
         assert settings()["general"]["language"] == "es", settings()
+        assert settings()["display"]["monitors"]["eDP-1"]["enabled"] is False, settings()
+        assert settings()["display"]["monitors"]["eDP-1"]["auto"] is False, settings()
         assert settings()["customPreference"] == "persist", settings()
         assert color_settings()["outputs"][output_name]["separation"] == 120
         assert color_settings()["outputs"][output_name]["saturation"] == 130
@@ -518,7 +577,10 @@ pkgs.testers.runNixOSTest {
             "XDG_PICTURES_DIR=\"$HOME/Imágenes\" serpantinum screenshot --full "
             "> /tmp/serpantinum-screenshot.log 2>&1"
         ), timeout=30)
-        machine.succeed(as_user("test -s \"$HOME\"/Imágenes/Screenshots/Screenshot_*.png"))
+        machine.succeed(as_user(
+            "for screenshot in \"$HOME\"/Imágenes/Screenshots/Screenshot_*.png; do "
+            "test -s \"$screenshot\" || exit 1; done"
+        ))
         machine.succeed(as_user("wl-paste --type image/png > /tmp/serpantinum-screenshot.png"))
         machine.succeed("test -s /tmp/serpantinum-screenshot.png")
         machine.send_key("meta_l-q")

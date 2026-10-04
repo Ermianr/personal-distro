@@ -46,9 +46,10 @@ if sys.argv[1:] == ["-j", "monitors"]:
     print(json.dumps(session["outputs"]))
 elif sys.argv[1:] == ["-j", "getoption", "decoration.screen_shader"]:
     print(json.dumps({"str": session["shader"]}))
-elif sys.argv[1:3] == ["-r", "eval"]:
-    match = re.search(r'screen_shader = (".*?")', sys.argv[3])
+elif sys.argv[1:3] == ["-r", "eval"] or sys.argv[1:2] == ["eval"]:
+    match = re.search(r'screen_shader = (".*?")', sys.argv[-1])
     session["shader"] = json.loads(match.group(1))
+    session["reloaded"] = sys.argv[1] == "-r"
     path.write_text(json.dumps(session))
     print("ok")
 else:
@@ -56,6 +57,28 @@ else:
 """
         )
         binary.chmod(0o755)
+        capture = binary_directory / "grim"
+        capture.write_text(
+            f"#!{sys.executable}\n"
+            + """
+import json
+import os
+from pathlib import Path
+import signal
+import sys
+
+path = Path(os.environ["TEST_SESSION"])
+session = json.loads(path.read_text())
+session["captured_shader"] = session["shader"]
+session["captured_after_reload"] = session.get("reloaded")
+path.write_text(json.dumps(session))
+print(json.dumps({"shader": session["shader"], "arguments": sys.argv[1:]}), flush=True)
+if "--terminate" in sys.argv[1:]:
+    os.kill(os.getppid(), signal.SIGTERM)
+sys.exit(1 if "--fail" in sys.argv[1:] else 0)
+"""
+        )
+        capture.chmod(0o755)
         self.environment = {
             **os.environ,
             "XDG_CONFIG_HOME": str(self.directory / "config"),
@@ -85,9 +108,58 @@ else:
     def change_session(self, **values: object) -> None:
         self.session.write_text(json.dumps({**self.session_state(), **values}))
 
+    def test_capture_uses_original_pixels_and_preserves_saved_settings(self) -> None:
+        self.run_command(
+            "set", "--output", "eDP-1", "--saturation", "150", "--enabled", "true"
+        )
+        shader = self.session_state()["shader"]
+        saved = self.config.read_text()
+        result = self.run_command(
+            "capture", "--", "-g", "10,20 30x40", "image with spaces.png"
+        )
+        self.assertEqual(result["shader"], "")
+        self.assertEqual(
+            result["arguments"], ["-g", "10,20 30x40", "image with spaces.png"]
+        )
+        # A reload before grim can produce a transparent screenshot.
+        self.assertIs(self.session_state()["captured_after_reload"], False)
+        self.assertIs(self.session_state()["reloaded"], True)
+        self.assertEqual(self.session_state()["shader"], shader)
+        self.assertEqual(self.config.read_text(), saved)
+
+    def test_failed_and_cancelled_capture_restore_the_active_filter(self) -> None:
+        self.run_command(
+            "set", "--output", "eDP-1", "--red", "96", "--white-balance-enabled", "true"
+        )
+        shader = self.session_state()["shader"]
+        saved = self.config.read_text()
+        for option in ("--fail", "--terminate"):
+            with self.subTest(option=option):
+                self.run_command("capture", "--", option, success=False)
+                self.assertEqual(self.session_state()["captured_shader"], "")
+                self.assertEqual(self.session_state()["shader"], shader)
+                self.assertEqual(self.config.read_text(), saved)
+
+    def test_capture_leaves_unrelated_screen_shaders_untouched(self) -> None:
+        for shader in ("", "[[EMPTY]]", "/other/filter.frag"):
+            with self.subTest(shader=shader):
+                self.change_session(shader=shader)
+                result = self.run_command("capture", "--", "-")
+                self.assertEqual(result["shader"], shader)
+                self.assertEqual(self.session_state()["shader"], shader)
+                self.assertFalse(self.config.exists())
+
     def test_increase_and_disable_preserve_independent_values(self) -> None:
         self.run_command(
-            "set", "--output", "eDP-1", "--separation", "140", "--saturation", "165"
+            "set",
+            "--output",
+            "eDP-1",
+            "--separation",
+            "140",
+            "--saturation",
+            "165",
+            "--enabled",
+            "true",
         )
         shader = Path(self.session_state()["shader"]).read_text()
         self.assertIn("wl_output == 0", shader)
@@ -102,10 +174,130 @@ else:
         self.run_command("set", "--output", "eDP-1", "--enabled", "true")
         self.assertNotEqual(self.session_state()["shader"], "")
 
+    def test_white_balance_survives_disabled_enhancement_and_reset_clears_it(
+        self,
+    ) -> None:
+        result = self.run_command(
+            "set",
+            "--output",
+            "eDP-1",
+            "--separation",
+            "140",
+            "--saturation",
+            "165",
+            "--red",
+            "96",
+            "--green",
+            "99",
+            "--blue",
+            "98",
+            "--enabled",
+            "false",
+            "--white-balance-enabled",
+            "true",
+        )
+        output = result["outputs"][0]
+        self.assertEqual((output["red"], output["green"], output["blue"]), (96, 99, 98))
+        self.assertEqual((output["separation"], output["saturation"]), (140, 165))
+        shader = Path(self.session_state()["shader"]).read_text()
+        self.assertIn("separation = 1.00000000", shader)
+        self.assertIn("saturation = 1.00000000", shader)
+        self.assertIn(
+            "white_balance = vec3(0.96000000, 0.99000000, 0.98000000)", shader
+        )
+        self.assertNotIn("wl_output == 1", shader)
+        self.change_session(shader="", outputs=[{"name": "eDP-1", "id": 7}])
+        self.run_command("apply")
+        self.assertIn(
+            "wl_output == 7", Path(self.session_state()["shader"]).read_text()
+        )
+        result = self.run_command(
+            "set", "--output", "eDP-1", "--white-balance-enabled", "false"
+        )
+        self.assertEqual(self.session_state()["shader"], "")
+        self.assertEqual(result["outputs"][0]["red"], 96)
+        self.run_command("set", "--output", "eDP-1", "--enabled", "true")
+        shader = Path(self.session_state()["shader"]).read_text()
+        self.assertIn("separation = 1.40000000", shader)
+        self.assertIn(
+            "white_balance = vec3(1.00000000, 1.00000000, 1.00000000)", shader
+        )
+        result = self.run_command(
+            "set", "--output", "eDP-1", "--white-balance-enabled", "true"
+        )
+        self.assertTrue(result["outputs"][0]["enabled"])
+        result = self.run_command("reset", "--output", "eDP-1")
+        output = result["outputs"][0]
+        self.assertEqual(
+            (output["red"], output["green"], output["blue"]), (100, 100, 100)
+        )
+        self.assertEqual(self.session_state()["shader"], "")
+        self.assertFalse(output["enabled"])
+        self.assertFalse(output["white_balance_enabled"])
+
+    def test_new_outputs_have_independent_disabled_defaults(self) -> None:
+        result = self.run_command("status")
+        for output in result["outputs"]:
+            self.assertFalse(output["enabled"])
+            self.assertFalse(output["white_balance_enabled"])
+        self.run_command("set", "--output", "eDP-1", "--red", "96")
+        self.assertEqual(self.session_state()["shader"], "")
+        result = self.run_command(
+            "set", "--output", "eDP-1", "--white-balance-enabled", "true"
+        )
+        self.assertFalse(result["outputs"][0]["enabled"])
+        self.assertNotEqual(self.session_state()["shader"], "")
+
+    def test_legacy_settings_default_to_neutral_white_balance(self) -> None:
+        self.config.parent.mkdir(parents=True)
+        self.config.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "outputs": {"eDP-1": {"enabled": False, "saturation": 130}},
+                }
+            )
+        )
+        result = self.run_command("set", "--output", "eDP-1", "--red", "96")
+        output = result["outputs"][0]
+        self.assertEqual(
+            (output["red"], output["green"], output["blue"]), (96, 100, 100)
+        )
+        self.assertEqual(output["saturation"], 130)
+        self.assertFalse(output["enabled"])
+        self.assertFalse(output["white_balance_enabled"])
+
+    def test_invalid_channel_gains_do_not_change_saved_values(self) -> None:
+        self.run_command(
+            "set", "--output", "eDP-1", "--red", "96", "--white-balance-enabled", "true"
+        )
+        previous = self.config.read_text()
+        previous_shader = self.session_state()["shader"]
+        for channel in ("red", "green", "blue"):
+            for value in ("nan", "inf", "-1", "101", "200"):
+                self.run_command(
+                    "set", "--output", "eDP-1", f"--{channel}", value, success=False
+                )
+                self.assertEqual(self.config.read_text(), previous)
+                self.assertEqual(self.session_state()["shader"], previous_shader)
+            self.config.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "outputs": {"eDP-1": {channel: 101}},
+                    }
+                )
+            )
+            self.run_command("apply", success=False)
+            self.assertEqual(self.session_state()["shader"], previous_shader)
+            self.config.write_text(previous)
+
     def test_reapply_resolves_monitor_ids_and_preserves_disconnected_settings(
         self,
     ) -> None:
-        self.run_command("set", "--output", "eDP-1", "--saturation", "150")
+        self.run_command(
+            "set", "--output", "eDP-1", "--saturation", "150", "--enabled", "true"
+        )
         previous = self.session_state()["shader"]
         self.change_session(shader="", outputs=[{"name": "eDP-1", "id": 7}])
         self.run_command("apply")
@@ -148,6 +340,12 @@ else:
         invalid_settings: list[dict[str, Any]] = [{"version": True, "outputs": {}}] + [
             {"version": 1, "outputs": {"eDP-1": {"separation": value}}}
             for value in invalid_values
+        ]
+        invalid_flags: list[Any] = [None, "true", 0, 1, [], {}]
+        invalid_settings += [
+            {"version": 1, "outputs": {"eDP-1": {flag: value}}}
+            for flag in ("enabled", "white_balance_enabled")
+            for value in invalid_flags
         ]
         for settings in invalid_settings:
             with self.subTest(settings=settings):
@@ -194,7 +392,9 @@ else:
                 self.run_command("apply", success=False)
 
     def test_watcher_retries_after_invalid_monitor_response(self) -> None:
-        self.run_command("set", "--output", "eDP-1", "--saturation", "150")
+        self.run_command(
+            "set", "--output", "eDP-1", "--saturation", "150", "--enabled", "true"
+        )
         self.change_session(shader="", outputs=[None])
         runtime = self.directory / "runtime"
         socket_path = runtime / "hypr/test/.socket2.sock"
@@ -237,7 +437,9 @@ else:
                 self.assertNotIn("Traceback", errors)
 
     def test_reset_disables_neutral_shader_and_other_filter_is_preserved(self) -> None:
-        self.run_command("set", "--output", "eDP-1", "--saturation", "180")
+        self.run_command(
+            "set", "--output", "eDP-1", "--saturation", "180", "--enabled", "true"
+        )
         result = self.run_command("reset", "--output", "eDP-1")
         self.assertEqual(result["outputs"][0]["saturation"], 100)
         self.assertEqual(self.session_state()["shader"], "")
@@ -245,7 +447,14 @@ else:
         self.change_session(shader="/otro/filtro.frag")
         self.run_command("apply")
         self.run_command(
-            "set", "--output", "eDP-1", "--saturation", "150", success=False
+            "set",
+            "--output",
+            "eDP-1",
+            "--saturation",
+            "150",
+            "--enabled",
+            "true",
+            success=False,
         )
         self.assertEqual(self.config.read_text(), previous)
         self.assertEqual(self.session_state()["shader"], "/otro/filtro.frag")

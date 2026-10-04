@@ -38,6 +38,9 @@ NixOS, con `/boot/efi` montado, para volver a ejecutar la detección automática
 `Super+Enter` abre Ghostty con Fish y el prompt de Starship para `razor`;
 `Super+W`, los fondos; `Super+Shift+C`, Personal Tweaks, con ajustes de color por
 pantalla y una paleta que se adapta al fondo mediante Matugen.
+El realce de color y el balance de blanco tienen interruptores independientes
+y están desactivados por defecto. La pantalla nocturna de Serpantinum se mantiene
+desactivada al aplicar Home Manager.
 En `desktop`, el panel usa siempre el modo de brillo directo de AMD.
 SDDM usa el tema astronaut y `~/Imágenes/Fondos/login.jpg`, inicializado
 desde `assets/login.jpg`. Los fondos de `~/Imágenes/Fondos` son reemplazables.

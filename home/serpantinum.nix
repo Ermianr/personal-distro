@@ -115,8 +115,9 @@ in
         };
       };
       display.monitors."eDP-1" = {
-        enabled = true;
-        auto = true;
+        # These flags control night light, not whether the monitor is turned on.
+        enabled = false;
+        auto = false;
         scale = 1;
       };
     };
