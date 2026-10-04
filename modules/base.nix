@@ -90,6 +90,8 @@ in
       settings.Resolve = {
         Domains = [ "~." ];
         Cache = true;
+        # Legacy LAN name resolution is unused here and answers spoofable queries.
+        LLMNR = "false";
       };
     };
     gnome.gnome-keyring.enable = true;
@@ -122,6 +124,10 @@ in
   time.timeZone = "America/Bogota";
   i18n.defaultLocale = "es_ES.UTF-8";
   console.keyMap = "la-latin1";
+
+  # Administration goes through sudo with razor's password. Mutable users keep an
+  # existing root password, so installed systems also need `sudo passwd -l root`.
+  users.users.root.hashedPassword = "!";
 
   users.users.razor = {
     isNormalUser = true;
