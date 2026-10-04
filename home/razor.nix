@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   braveOriginPackage,
   ...
@@ -37,6 +38,14 @@
       gnumake
       pkg-config
     ];
+    # Track the current Node LTS; offline activations keep the installed versions.
+    activation.fnmNodeLts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      if run ${pkgs.fnm}/bin/fnm install --lts; then
+        run ${pkgs.fnm}/bin/fnm default lts-latest
+      else
+        warnEcho "fnm could not install the current Node LTS"
+      fi
+    '';
   };
 
   programs = {
