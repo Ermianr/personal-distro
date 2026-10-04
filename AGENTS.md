@@ -16,8 +16,8 @@ with Home Manager and Serpantinum for user `razor`.
 
 Use English for filenames, identifiers, comments, docstrings, logs, error messages,
 `AGENTS.md` and other contributor documentation. Use Spanish for end-user UI,
-end-user documentation and commit messages; developer commands and diagnostics
-remain English.
+end-user documentation, commit messages and all agent replies to the user;
+developer commands and diagnostics remain English.
 
 - Nix/Bash: two spaces; lowercase hyphenated filenames. Python: four spaces,
   double quotes, snake_case and type annotations. QML: qmlformat defaults.
