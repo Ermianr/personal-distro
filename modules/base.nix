@@ -83,7 +83,11 @@ in
       sddm = {
         enable = true;
         package = pkgs.kdePackages.sddm;
-        wayland.enable = true;
+        wayland = {
+          enable = true;
+          # Weston's kiosk shell lacks the greeter's layer-shell and leaves the pointer invisible.
+          compositor = "kwin";
+        };
         theme = "sddm-astronaut-theme";
         extraPackages = sddmAstronautTheme.propagatedBuildInputs;
         settings = {
