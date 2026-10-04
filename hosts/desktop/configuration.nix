@@ -8,6 +8,10 @@
 
   networking.hostName = "desktop";
 
+  # The default amdgpu backlight curve leaves this panel too dim; 0x40000 sets
+  # DC_DISABLE_CUSTOM_BRIGHTNESS_CURVE so brightness levels map directly.
+  boot.kernelParams = [ "amdgpu.dcdebugmask=0x40000" ];
+
   boot.loader = {
     efi = {
       canTouchEfiVariables = true;
