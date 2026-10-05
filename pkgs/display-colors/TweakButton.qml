@@ -14,7 +14,7 @@ Button {
     opacity: enabled ? 1 : 0.45
     contentItem: Text {
         text: root.text
-        color: root.accented ? root.theme.sidebar : root.theme.text
+        color: root.accented ? root.theme.onAccent : root.theme.text
         font.family: root.theme.fontFamily
         font.pixelSize: 13
         font.weight: Font.Medium

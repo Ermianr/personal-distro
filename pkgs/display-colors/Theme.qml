@@ -7,23 +7,27 @@ import Quickshell.Io
 Item {
     id: root
     readonly property string fontFamily: "Rubik"
+    // Serpantinum ships this Nerd Font for its own icons.
+    readonly property string iconFamily: "Iosevka Nerd Font"
     property var colors: ({
             base: "#1e1e2e",
-            mantle: "#181825",
+            crust: "#11111b",
             text: "#cdd6f4",
             subtext0: "#a6adc8",
             surface0: "#313244",
             surface1: "#45475a",
-            blue: "#89b4fa",
+            mauve: "#cba6f7",
             red: "#f38ba8"
         })
     readonly property color background: colors.base
-    readonly property color sidebar: colors.mantle
+    // Match the translucent sidebar and accent of Serpantinum's settings guide.
+    readonly property color sidebar: Qt.alpha(colors.surface0, 0.4)
     readonly property color text: colors.text
     readonly property color muted: colors.subtext0
     readonly property color surface: colors.surface0
     readonly property color border: colors.surface1
-    readonly property color accent: colors.blue
+    readonly property color accent: colors.mauve
+    readonly property color onAccent: colors.crust
     readonly property color error: colors.red
 
     // Share Matugen's generated palette without importing the shell or starting it.

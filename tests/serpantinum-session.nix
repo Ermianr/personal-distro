@@ -188,9 +188,13 @@ pkgs.testers.runNixOSTest {
         mice_reply: Any = machine.qmp_client.send("query-mice")
         tablet_id = next(mouse["index"] for mouse in mice_reply["return"] if mouse["absolute"])
         machine.send_monitor_command(f"mouse_set {tablet_id}")
+        # The tablet spans the logical layout, which is smaller than 1600x900 when scaled.
+        monitor = json.loads(machine.succeed(as_user("hyprctl -j monitors")))[0]
+        width = monitor["width"] / monitor["scale"]
+        height = monitor["height"] / monitor["scale"]
         pointer_events: Any = {"events": [
-            {"type": "abs", "data": {"axis": "x", "value": round(x * 32767 / 1600)}},
-            {"type": "abs", "data": {"axis": "y", "value": round(y * 32767 / 900)}},
+            {"type": "abs", "data": {"axis": "x", "value": round(x * 32767 / width)}},
+            {"type": "abs", "data": {"axis": "y", "value": round(y * 32767 / height)}},
         ]}
         machine.qmp_client.send("input-send-event", pointer_events)
         machine.wait_until_succeeds(as_user(
@@ -512,7 +516,17 @@ pkgs.testers.runNixOSTest {
         machine.sleep(1)
         assert_background(expected_background)
         machine.succeed(as_user(color_command + " --enabled true"))
-        machine.send_key("meta_l-q")
+        # The connectivity tabs must open even without Wi-Fi or Bluetooth hardware.
+        tab_x = color_window["at"][0] + 120
+        for name, tab_y in (("wifi", 131), ("bluetooth", 179)):
+            click_at(tab_x, color_window["at"][1] + tab_y)
+            machine.sleep(1)
+            machine.wait_until_succeeds(as_user(
+                "hyprctl -j clients | jq -e 'any(.[]; .title == \"Personal Tweaks\")'"
+            ), timeout=10)
+            machine.screenshot("personal-tweaks-" + name)
+        # Escape closes the window from any tab, without decorations or a close button.
+        machine.send_key("esc")
         machine.wait_until_fails(as_user(
             "hyprctl -j clients | jq -e 'any(.[]; .title == \"Personal Tweaks\")'"
         ), timeout=10)

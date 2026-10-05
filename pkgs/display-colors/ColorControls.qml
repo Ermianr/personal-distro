@@ -180,6 +180,7 @@ ColumnLayout {
                 id: outputPicker
                 Layout.fillWidth: true
                 implicitHeight: 42
+                leftPadding: 16
                 enabled: root.outputs.length > 0 && !backend.running && !root.pending
                 model: root.outputs
                 textRole: "name"
@@ -191,7 +192,7 @@ ColumnLayout {
                 palette.text: root.theme.text
                 palette.base: root.theme.surface
                 palette.highlight: root.theme.accent
-                palette.highlightedText: root.theme.sidebar
+                palette.highlightedText: root.theme.onAccent
                 Accessible.name: "Pantalla que quieres ajustar"
                 background: Rectangle {
                     radius: 10
@@ -259,38 +260,12 @@ ColumnLayout {
                         Layout.fillWidth: true
                     }
                 }
-                Switch {
+                TweakSwitch {
                     id: filterSwitch
+                    theme: root.theme
                     checked: root[filterControl.modelData.key]
                     enabled: root.loaded
-                    implicitWidth: 50
-                    implicitHeight: 30
-                    padding: 0
                     Accessible.name: "Activar " + filterControl.modelData.title.toLowerCase()
-                    indicator: Rectangle {
-                        implicitWidth: 50
-                        implicitHeight: 28
-                        x: (filterSwitch.width - width) / 2
-                        y: (filterSwitch.height - height) / 2
-                        radius: 14
-                        color: filterSwitch.checked ? root.theme.accent : root.theme.border
-                        opacity: filterSwitch.enabled ? 1 : 0.45
-                        border.width: filterSwitch.visualFocus ? 2 : 0
-                        border.color: root.theme.text
-                        Rectangle {
-                            width: 20
-                            height: 20
-                            x: filterSwitch.checked ? parent.width - width - 4 : 4
-                            y: 4
-                            radius: 10
-                            color: filterSwitch.checked ? root.theme.sidebar : root.theme.text
-                            Behavior on x {
-                                NumberAnimation {
-                                    duration: 120
-                                }
-                            }
-                        }
-                    }
                     onToggled: {
                         root[filterControl.modelData.key] = checked;
                         root.queueApply();
