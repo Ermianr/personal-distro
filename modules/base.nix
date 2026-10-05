@@ -73,6 +73,15 @@ in
         '';
       };
     };
+    # The SDDM greeter has no use for audio, and its WirePlumber aborts when the greeter exits.
+    user =
+      let
+        skipSystemUsers.unitConfig.ConditionUser = "!@system";
+      in
+      {
+        sockets = lib.genAttrs [ "pipewire" "pipewire-pulse" ] (_: skipSystemUsers);
+        services = lib.genAttrs [ "pipewire" "pipewire-pulse" "wireplumber" ] (_: skipSystemUsers);
+      };
     # NixOS passes the XKB layout only to Weston; KWin's greeter reads it from kxkbrc.
     tmpfiles.settings.sddm-keyboard = {
       "${config.users.users.sddm.home}/.config".d = {

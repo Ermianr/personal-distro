@@ -222,6 +222,9 @@ in
 
   systemd.user.services = {
     serpantinum.Service.ExecStartPre = toString prepareWallpaper;
+    # `easyeffects --quit` needs the compositor; at shutdown it hangs until the stop timeout and
+    # its delayed exit reactivates the portals without a display. The daemon exits on SIGTERM.
+    easyeffects.Service.ExecStop = lib.mkForce [ ];
   }
   // lib.genAttrs [ "clipboard-text" "clipboard-image" ] (name: {
     Unit = {
