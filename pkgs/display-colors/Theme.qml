@@ -32,7 +32,6 @@ Item {
 
     // Share Matugen's generated palette without importing the shell or starting it.
     FileView {
-        id: paletteFile
         path: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/serpantinum/qs_matugen_colors.json"
         watchChanges: true
         printErrors: false

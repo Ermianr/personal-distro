@@ -18,6 +18,7 @@ ColumnLayout {
     property bool attemptWasKnown: false
     property string forgetCandidate: ""
     property bool hiddenOpen: false
+    property string hiddenSsidAttempt: ""
     property string hiddenPassword: ""
     property string message: ""
     property bool messageIsError: false
@@ -144,6 +145,9 @@ ColumnLayout {
     }
 
     function connectHidden(): void {
+        // Enter bypasses the disabled button, and Quickshell would rerun the helper.
+        if (hiddenProcess.running)
+            return;
         const ssid = hiddenSsid.text.trim();
         // The helper validates the 32-byte SSID limit after UTF-8 encoding.
         if (ssid === "")
@@ -153,6 +157,7 @@ ColumnLayout {
             return;
         }
         hiddenPassword = hiddenPasswordField.text;
+        hiddenSsidAttempt = ssid;
         hiddenProcess.command = [connectivityCommand, "connect-hidden", "--ssid", ssid];
         hiddenProcess.running = true;
         showMessage("Conectando a «" + ssid + "»…", false);
@@ -217,7 +222,7 @@ ColumnLayout {
                 result = JSON.parse(hiddenOutput.text);
             } catch (error) {}
             if (result && typeof result.ok === "boolean" && typeof result.message === "string" && result.ok) {
-                root.showMessage("Conectado a «" + hiddenSsid.text.trim() + "».", false);
+                root.showMessage("Conectado a «" + root.hiddenSsidAttempt + "».", false);
                 root.hiddenOpen = false;
                 hiddenSsid.text = "";
                 hiddenPasswordField.text = "";

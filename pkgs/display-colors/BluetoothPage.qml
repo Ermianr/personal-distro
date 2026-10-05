@@ -237,7 +237,8 @@ ColumnLayout {
     Timer {
         id: agentRestart
         interval: 3000
-        onTriggered: agent.running = root.adapter !== null
+        // Assigning a plain value would drop the binding that stops the agent without an adapter.
+        onTriggered: agent.running = Qt.binding(() => root.adapter !== null)
     }
 
     Popup {

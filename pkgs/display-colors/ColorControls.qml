@@ -12,7 +12,6 @@ ColumnLayout {
     required property Theme theme
     property var outputs: []
     property string selectedName: ""
-    readonly property string selectedOutput: selectedName
     property real separation: 100
     property real saturation: 100
     property real red: 100
@@ -33,7 +32,7 @@ ColumnLayout {
             outputs = data.outputs;
             if (!pending && outputs.length && !outputs.some(output => output.name === selectedName))
                 selectedName = outputs[0].name;
-            const selected = outputs.find(output => output.name === selectedOutput);
+            const selected = outputs.find(output => output.name === selectedName);
             loaded = selected !== undefined;
             if (selected && !pending) {
                 separation = selected.separation;
@@ -59,7 +58,7 @@ ColumnLayout {
     }
 
     function setCommand() {
-        return [controllerCommand, "set", "--output", selectedOutput, "--separation", String(Math.round(separation)), "--saturation", String(Math.round(saturation)), "--red", String(Math.round(red)), "--green", String(Math.round(green)), "--blue", String(Math.round(blue)), "--enabled", String(filterEnabled), "--white-balance-enabled", String(whiteBalanceEnabled)];
+        return [controllerCommand, "set", "--output", selectedName, "--separation", String(Math.round(separation)), "--saturation", String(Math.round(saturation)), "--red", String(Math.round(red)), "--green", String(Math.round(green)), "--blue", String(Math.round(blue)), "--enabled", String(filterEnabled), "--white-balance-enabled", String(whiteBalanceEnabled)];
     }
 
     function queueApply() {
@@ -184,7 +183,7 @@ ColumnLayout {
                 enabled: root.outputs.length > 0 && !backend.running && !root.pending
                 model: root.outputs
                 textRole: "name"
-                currentIndex: root.outputs.findIndex(output => output.name === root.selectedOutput)
+                currentIndex: root.outputs.findIndex(output => output.name === root.selectedName)
                 font.family: root.theme.fontFamily
                 font.pixelSize: 13
                 palette.button: root.theme.surface
@@ -261,7 +260,6 @@ ColumnLayout {
                     }
                 }
                 TweakSwitch {
-                    id: filterSwitch
                     theme: root.theme
                     checked: root[filterControl.modelData.key]
                     enabled: root.loaded

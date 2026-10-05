@@ -2,25 +2,16 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=vm-common.sh
+source "$script_dir/vm-common.sh"
+vm_enter_tools "${BASH_SOURCE[0]}" "$@"
+
 disk="$script_dir/vm/nixos.qcow2"
 ovmf_vars="$script_dir/vm/OVMF_VARS.fd"
-ovmf_code="/usr/share/OVMF/OVMF_CODE_4M.fd"
+ovmf_code="$(vm_ovmf_code)"
 installer="$script_dir/isos/nixos-minimal-26.05-x86_64.iso"
-
-if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then
-  printf 'Error: command not found: qemu-system-x86_64\n' >&2
-  exit 1
-fi
-for file in "$disk" "$ovmf_vars" "$ovmf_code" "$installer"; do
-  if [[ ! -f "$file" ]]; then
-    printf 'Error: file not found: %s\n' "$file" >&2
-    exit 1
-  fi
-done
-if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
-  printf 'Error: read and write access to /dev/kvm is required.\n' >&2
-  exit 1
-fi
+vm_require_files "$disk" "$ovmf_vars" "$ovmf_code" "$installer"
+vm_require_kvm
 
 exec qemu-system-x86_64 \
   -machine q35,accel=kvm \

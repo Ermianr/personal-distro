@@ -278,6 +278,13 @@ pkgs.testers.runNixOSTest {
         machine.sleep(2)
         initial_login_samples = login_background_samples()
         machine.screenshot("sddm-login-initial")
+        # Root must not follow a user symlink when granting SDDM access to the background.
+        machine.succeed(as_user("ln -sf /etc/shadow ~/Imágenes/Fondos/login.jpg"))
+        machine.succeed("systemctl restart display-manager.service")
+        machine.wait_for_unit("display-manager.service")
+        machine.fail("${pkgs.acl}/bin/getfacl -p /etc/shadow | grep -q sddm")
+        machine.succeed("journalctl -b -u display-manager.service | grep -q 'login.jpg is a symbolic link'")
+        machine.succeed(as_user("rm ~/Imágenes/Fondos/login.jpg"))
         machine.succeed(as_user("install -m 0600 ${../assets/wallpaper.jpg} ~/Imágenes/Fondos/login.jpg"))
         machine.succeed("systemctl restart display-manager.service")
         machine.wait_for_text("teclado virtual", timeout=120)
@@ -467,7 +474,8 @@ pkgs.testers.runNixOSTest {
         )
         # External controller changes must refresh the open window.
         machine.succeed(as_user(color_command + " --separation 140 --saturation 130"))
-        machine.sleep(1)
+        # The window refreshes asynchronously; a key press before that would start from 120.
+        machine.wait_for_text("140 %", timeout=30)
         machine.send_key("right")
         machine.wait_until_succeeds(
             "jq -e '.outputs[\"" + output_name + "\"].separation == 141' "

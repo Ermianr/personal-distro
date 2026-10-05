@@ -33,7 +33,9 @@ class Reply(TypedDict):
     value: str
 
 
-def emit(event: dict[str, object]) -> None:
+def emit(kind: str, request_id: int = 0, device: str = "", code: str = "") -> None:
+    # Every event has the same shape because the window rejects incomplete events.
+    event = {"type": kind, "id": request_id, "device": device, "code": code}
     print(json.dumps(event), flush=True)
 
 
@@ -109,11 +111,11 @@ class PairingAgent(ServiceInterface):
         request_id = self.next_id
         future: asyncio.Future[Reply] = asyncio.get_running_loop().create_future()
         self.pending[request_id] = future
-        emit({"type": kind, "id": request_id, "device": device, "code": code})
+        emit(kind, request_id, device, code)
         try:
             reply = await asyncio.wait_for(future, PROMPT_TIMEOUT)
         except TimeoutError:
-            emit({"type": "cancel"})
+            emit("cancel")
             raise DBusError("org.bluez.Error.Canceled", "No answer") from None
         finally:
             self.pending.pop(request_id, None)
@@ -128,7 +130,7 @@ class PairingAgent(ServiceInterface):
 
     @dbus_method()
     def Release(self) -> None:
-        emit({"type": "cancel"})
+        emit("cancel")
 
     @dbus_method()
     async def RequestPinCode(self, device: DBusObjectPath) -> DBusStr:
@@ -140,7 +142,7 @@ class PairingAgent(ServiceInterface):
 
     @dbus_method()
     def DisplayPinCode(self, device: DBusObjectPath, pincode: DBusStr) -> None:
-        emit({"type": "display", "id": 0, "device": device, "code": pincode})
+        emit("display", device=device, code=pincode)
 
     @dbus_method()
     async def RequestPasskey(self, device: DBusObjectPath) -> DBusUInt32:
@@ -154,7 +156,7 @@ class PairingAgent(ServiceInterface):
         self, device: DBusObjectPath, passkey: DBusUInt32, entered: DBusUInt16
     ) -> None:
         del entered
-        emit({"type": "display", "id": 0, "device": device, "code": f"{passkey:06d}"})
+        emit("display", device=device, code=f"{passkey:06d}")
 
     @dbus_method()
     async def RequestConfirmation(
@@ -177,7 +179,7 @@ class PairingAgent(ServiceInterface):
         for request_id, future in self.pending.items():
             if not future.done():
                 future.set_result({"id": request_id, "accept": False, "value": ""})
-        emit({"type": "cancel"})
+        emit("cancel")
 
 
 async def run_agent() -> int:
@@ -191,9 +193,9 @@ async def run_agent() -> int:
         )
         await call(bus, *manager, "RequestDefaultAgent", "o", [AGENT_PATH])
     except DBusError as error:
-        emit({"type": "error", "id": 0, "device": "", "code": error.text})
+        emit("error", code=error.text)
         return 1
-    emit({"type": "ready", "id": 0, "device": "", "code": ""})
+    emit("ready")
 
     loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader()

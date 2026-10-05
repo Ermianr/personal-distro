@@ -47,6 +47,7 @@ developer commands and diagnostics remain English.
 - `uv sync --locked`; `uv run --locked ruff check .`;
   `uv run --locked ruff format --check .`; `uv run --locked pyrefly check`.
 - `uv run --locked python tests/display-colors.py pkgs/display-colors/display-colors.py`.
+- `uv run --locked python tests/connectivity.py pkgs/display-colors/connectivity.py`.
 - `nix build .#display-colors .#serpantinum --no-link`: package checks/builds.
 - `nix build .#nixosConfigurations.desktop.config.system.build.toplevel --no-link`:
   physical profile; replace `desktop` with `desktop-vm` for the VM.

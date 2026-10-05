@@ -30,6 +30,7 @@ stdenvNoCC.mkDerivation {
   checkPhase = ''
     runHook preCheck
     ${python3}/bin/python3 ${../../tests/display-colors.py} display-colors.py
+    ${connectivityPython}/bin/python3 ${../../tests/connectivity.py} connectivity.py
     runHook postCheck
   '';
   installPhase = ''

@@ -148,6 +148,8 @@ source_dir="$1"
 flake_profile="$2"
 reboot_vm="$3"
 flake_ref="path:$source_dir"
+# Evaluation copies the sources into the store, so the uploaded snapshot is temporary.
+trap 'rm -rf -- "${source_dir%/source}"' EXIT
 
 # The path: reference includes the uploaded uncommitted and untracked sources.
 expected_system="$(nix eval --raw "$flake_ref#nixosConfigurations.$flake_profile.config.system.build.toplevel.outPath")"

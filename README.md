@@ -39,17 +39,19 @@ NixOS, con `/boot/efi` montado, para volver a ejecutar la detección automática
 `Super+W`, los fondos; `Super+Shift+C`, Personal Tweaks, con ajustes de color por
 pantalla y una paleta que se adapta al fondo mediante Matugen.
 El realce de color y el balance de blanco tienen interruptores independientes
-y están desactivados por defecto. La pantalla nocturna de Serpantinum se mantiene
-desactivada al aplicar Home Manager.
+y están desactivados por defecto. Los ajustes de Serpantinum declarados en Nix,
+como la pantalla nocturna desactivada, son valores iniciales: se aplican la
+primera vez o cuando cambian en Nix, y lo que cambies desde el shell se conserva.
 En `desktop`, el panel usa siempre el modo de brillo directo de AMD.
 SDDM usa el tema astronaut y `~/Imágenes/Fondos/login.jpg`, inicializado
 desde `assets/login.jpg`. Los fondos de `~/Imágenes/Fondos` son reemplazables.
 
 Python, uv y Rust (Cargo, rustfmt, Clippy y rust-analyzer) están disponibles en la
-terminal. Para instalar Node.js con fnm, ejecuta `fnm install --lts` y
-`fnm use lts-latest`; Fish cambia de versión al entrar en proyectos con `.nvmrc`
-o `.node-version`.
+terminal. Home Manager instala con fnm la versión LTS actual de Node.js y la deja
+por defecto cuando hay conexión; Fish cambia de versión al entrar en proyectos
+con `.nvmrc` o `.node-version`.
 
-Para la VM existente: `bash boot-vm.sh`. Para aplicar el repositorio en ella:
+Para la VM existente: `bash boot-vm.sh` (descarga QEMU, OVMF y el visor fijados
+por el flake; al cerrar el visor, la VM se apaga de forma ordenada). Para aplicar el repositorio en ella:
 `bash update-vm.sh` (requiere SSH en el puerto 2222 y reinicia la VM).
 `bash update-vm.sh --help` muestra las opciones.

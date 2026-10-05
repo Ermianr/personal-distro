@@ -2,40 +2,40 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=vm-common.sh
+source "$script_dir/vm-common.sh"
+vm_enter_tools "${BASH_SOURCE[0]}" "$@"
 
 vm_dir="$script_dir/vm"
 disk="$vm_dir/nixos.qcow2"
 ovmf_vars="$vm_dir/OVMF_VARS.fd"
-ovmf_code="/usr/share/OVMF/OVMF_CODE_4M.fd"
-
-for file in "$disk" "$ovmf_vars" "$ovmf_code"; do
-  if [[ ! -f "$file" ]]; then
-    printf 'Error: file not found: %s\n' "$file" >&2
-    exit 1
-  fi
-done
-
-for cmd in qemu-system-x86_64 remote-viewer; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    printf 'Error: command not found: %s\n' "$cmd" >&2
-    exit 1
-  fi
-done
-
-if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
-  printf 'Error: read and write access to /dev/kvm is required.\n' >&2
-  exit 1
-fi
+ovmf_code="$(vm_ovmf_code)"
+vm_require_files "$disk" "$ovmf_vars" "$ovmf_code"
+vm_require_kvm
 
 # The private directory restricts the unauthenticated SPICE socket to this user.
 spice_runtime_dir="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/personal-distro-spice.XXXXXX")"
 
 spice_socket="$spice_runtime_dir/spice.sock"
+qmp_socket="$spice_runtime_dir/qmp.sock"
 qemu_pid=""
+
+# Ask the guest to shut down like a power button; SIGTERM alone cuts its power.
+stop_vm() {
+  printf 'Shutting down the VM…\n'
+  printf '%s\n' '{"execute":"qmp_capabilities"}' '{"execute":"system_powerdown"}' |
+    socat - "UNIX-CONNECT:$qmp_socket" >/dev/null 2>&1 || true
+  for _ in {1..600}; do
+    kill -0 "$qemu_pid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  printf 'Warning: the guest did not shut down within 60 seconds; stopping QEMU.\n' >&2
+  kill "$qemu_pid" 2>/dev/null || true
+}
 
 cleanup() {
   if [[ -n "$qemu_pid" ]] && kill -0 "$qemu_pid" 2>/dev/null; then
-    kill "$qemu_pid" 2>/dev/null || true
+    stop_vm
     wait "$qemu_pid" 2>/dev/null || true
   fi
 
@@ -65,6 +65,7 @@ qemu-system-x86_64 \
   -device virtserialport,chardev=vdagent,name=com.redhat.spice.0 \
   -vga virtio \
   -spice unix=on,addr="$spice_socket",disable-ticketing=on \
+  -qmp unix:"$qmp_socket",server=on,wait=off \
   -audiodev spice,id=audio0 \
   -device intel-hda \
   -device hda-output,audiodev=audio0 \

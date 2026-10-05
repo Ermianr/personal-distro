@@ -12,6 +12,15 @@ let
   prepareLoginBackground = pkgs.writeShellScript "prepare-login-background" ''
     set -euo pipefail
     login_background=${lib.escapeShellArg loginBackground}
+    # These paths belong to razor, and setfacl as root would grant SDDM access to a
+    # symlink's target anywhere on the system. Skip them without blocking the greeter;
+    # -P also rejects a final component swapped for a symlink after the check.
+    for path in ${lib.escapeShellArg picturesDir} ${lib.escapeShellArg wallpaperDir} "$login_background"; do
+      if [ -L "$path" ]; then
+        printf 'warning: %s is a symbolic link; SDDM will not be given access to it.\n' "$path" >&2
+        exit 0
+      fi
+    done
     for directory in ${lib.escapeShellArg picturesDir} ${lib.escapeShellArg wallpaperDir}; do
       if [ ! -d "$directory" ]; then
         ${pkgs.coreutils}/bin/install -d -m 0755 -o razor -g users -- "$directory"
@@ -22,11 +31,13 @@ let
       ${pkgs.coreutils}/bin/install -m 0644 -o razor -g users -- ${../assets/login.jpg} "$login_background"
     fi
     # SDDM needs directory traversal and image access, never a home directory listing.
-    ${pkgs.acl}/bin/setfacl -m g:sddm:--x -- \
+    ${pkgs.acl}/bin/setfacl -P -m g:sddm:--x -- \
       ${lib.escapeShellArg config.users.users.razor.home} \
-      ${lib.escapeShellArg picturesDir} ${lib.escapeShellArg wallpaperDir}
+      ${lib.escapeShellArg picturesDir} ${lib.escapeShellArg wallpaperDir} ||
+      printf 'warning: could not give SDDM access to the background directories.\n' >&2
     if ! ${pkgs.util-linux}/bin/runuser -u sddm -- ${pkgs.coreutils}/bin/test -r "$login_background"; then
-      ${pkgs.acl}/bin/setfacl -m g:sddm:r-- -- "$login_background"
+      ${pkgs.acl}/bin/setfacl -P -m g:sddm:r-- -- "$login_background" ||
+        printf 'warning: could not give SDDM access to %s.\n' "$login_background" >&2
     fi
   '';
 in
