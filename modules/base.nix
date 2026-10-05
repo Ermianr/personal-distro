@@ -125,6 +125,15 @@ in
         LLMNR = "false";
       };
     };
+    # WirePlumber keeps a remembered output even when headphones appear, and once that output
+    # vanishes it may fall back to EasyEffects' own sink, which leaves EasyEffects without an output.
+    # Newly connected hardware sinks (jack profile switch, Bluetooth) therefore become the default.
+    pipewire.extraConfig.pipewire-pulse.switch-on-connect."pulse.cmd" = [
+      {
+        cmd = "load-module";
+        args = "module-switch-on-connect";
+      }
+    ];
     gnome.gnome-keyring.enable = true;
     upower.enable = true;
     displayManager = {
