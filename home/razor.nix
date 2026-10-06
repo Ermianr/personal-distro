@@ -29,22 +29,29 @@
       fnm
       python3
       uv
-      rustc
-      cargo
-      rustfmt
-      clippy
-      rust-analyzer
+      # rustup tracks upstream releases; nixpkgs lags behind them.
+      rustup
       # Native extensions and Rust crates need a compiler and linker.
       gcc
       gnumake
       pkg-config
     ];
+    # Binaries installed with `cargo install`.
+    sessionPath = [ "$HOME/.cargo/bin" ];
     # Track the current Node LTS; offline activations keep the installed versions.
     activation.fnmNodeLts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       if run ${pkgs.fnm}/bin/fnm install --lts; then
         run ${pkgs.fnm}/bin/fnm default lts-latest
       else
         warnEcho "fnm could not install the current Node LTS"
+      fi
+    '';
+    # Track the current stable Rust; offline activations keep the installed toolchain.
+    activation.rustupStable = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      if run ${pkgs.rustup}/bin/rustup toolchain install stable --component rust-analyzer; then
+        run ${pkgs.rustup}/bin/rustup default stable
+      else
+        warnEcho "rustup could not install the current stable Rust"
       fi
     '';
   };
