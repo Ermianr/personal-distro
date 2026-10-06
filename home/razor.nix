@@ -3,6 +3,7 @@
   lib,
   pkgs,
   braveOriginPackage,
+  zedPackage,
   ...
 }:
 {
@@ -24,7 +25,7 @@
     };
     packages = with pkgs; [
       braveOriginPackage
-      zed-editor
+      zedPackage
       fnm
       python3
       uv
@@ -49,6 +50,7 @@
   };
 
   programs = {
+    gh.enable = true;
     git = {
       enable = true;
       settings = {

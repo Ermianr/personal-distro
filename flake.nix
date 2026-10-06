@@ -26,8 +26,10 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       devTools = import ./dev { inherit pkgs nixpkgs; };
-      # Brave Origin is absent from pinned stable nixpkgs; only this package uses unstable.
+      # Brave Origin is absent from pinned stable nixpkgs.
       braveOriginPackage = nixpkgs-unstable.legacyPackages.${system}.brave-origin;
+      # Newer Zed releases include Linux font-cache and rendering performance fixes.
+      zedPackage = nixpkgs-unstable.legacyPackages.${system}.zed-editor;
       waylandVdagentSrc = inputs."wayland-vdagent";
       displayColorsPackage = pkgs.callPackage ./pkgs/display-colors { };
       loginBackground = "/home/razor/Imágenes/Fondos/login.jpg";
@@ -80,6 +82,7 @@
               serpantinumPackage
               displayColorsPackage
               braveOriginPackage
+              zedPackage
               ;
           };
           users.razor = ./home/razor.nix;
@@ -105,6 +108,7 @@
 
       packages.${system} = {
         brave-origin = braveOriginPackage;
+        zed-editor = zedPackage;
         display-colors = displayColorsPackage;
         serpantinum = serpantinumPackage;
         sddm-astronaut = sddmAstronautTheme;
