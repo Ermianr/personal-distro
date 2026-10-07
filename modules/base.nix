@@ -190,7 +190,20 @@ in
   programs = {
     fish.enable = true;
     # fnm downloads upstream Node binaries that use the standard Linux loader.
-    nix-ld.enable = true;
+    nix-ld = {
+      enable = true;
+      # X11, font and PulseAudio libraries for prebuilt desktop binaries.
+      libraries = with pkgs; [
+        libx11
+        libxext
+        libxrender
+        libxtst
+        libxi
+        freetype
+        fontconfig
+        libpulseaudio
+      ];
+    };
     hyprland = {
       enable = true;
       withUWSM = true;

@@ -32,12 +32,38 @@
       # rustup tracks upstream releases; nixpkgs lags behind them.
       rustup
       # Native extensions and Rust crates need a compiler and linker.
-      gcc
+      clang
       gnumake
       pkg-config
+      cmake
+      ninja
+      meson
+      mold
+      lldb
+      clang-tools
+      bubblewrap
     ];
     # Binaries installed with `cargo install`.
     sessionPath = [ "$HOME/.cargo/bin" ];
+    # NixOS has no global library paths, so expose graphics/audio libraries only
+    # to Cargo builds and runs: a session-wide LD_LIBRARY_PATH would also reach
+    # Zed and Brave, which come from nixpkgs-unstable.
+    file.".cargo/config.toml".source =
+      let
+        libraries = with pkgs; [
+          wayland
+          libxkbcommon
+          alsa-lib
+          vulkan-loader
+        ];
+      in
+      (pkgs.formats.toml { }).generate "cargo-config.toml" {
+        env = {
+          PKG_CONFIG_PATH = lib.makeSearchPathOutput "dev" "lib/pkgconfig" libraries;
+          # winit and wgpu dlopen these at runtime instead of linking them.
+          LD_LIBRARY_PATH = lib.makeLibraryPath libraries;
+        };
+      };
     # Track the current Node LTS; offline activations keep the installed versions.
     activation.fnmNodeLts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       if run ${pkgs.fnm}/bin/fnm install --lts; then
@@ -58,6 +84,11 @@
 
   programs = {
     gh.enable = true;
+    # Pin the LTS explicitly; the unversioned temurin-bin alias trails it.
+    java = {
+      enable = true;
+      package = pkgs.temurin-bin-25;
+    };
     git = {
       enable = true;
       settings = {
