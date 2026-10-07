@@ -110,6 +110,7 @@
         brave-origin = braveOriginPackage;
         zed-editor = zedPackage;
         display-colors = displayColorsPackage;
+        bluetooth-autoconnect = pkgs.callPackage ./pkgs/bluetooth-autoconnect { };
         serpantinum = serpantinumPackage;
         sddm-astronaut = sddmAstronautTheme;
       };

@@ -1,4 +1,7 @@
 { pkgs, ... }:
+let
+  bluetoothAutoconnect = pkgs.callPackage ../../pkgs/bluetooth-autoconnect { };
+in
 {
   imports = [
     ../../modules/base.nix
@@ -44,6 +47,25 @@
       powerOnBoot = true;
     };
     i2c.enable = true;
+  };
+
+  # Reconnect saved devices independently of SDDM and the user's session.
+  systemd.services.bluetooth-autoconnect = {
+    description = "Reconnect paired and trusted Bluetooth devices";
+    wantedBy = [ "bluetooth.service" ];
+    after = [ "bluetooth.service" ];
+    requires = [ "bluetooth.service" ];
+    partOf = [ "bluetooth.service" ];
+    serviceConfig = {
+      ExecStart = "${bluetoothAutoconnect}/bin/bluetooth-autoconnect";
+      Restart = "on-failure";
+      RestartSec = "5s";
+      DynamicUser = true;
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+    };
   };
 
   programs.steam.enable = true;

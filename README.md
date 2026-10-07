@@ -43,6 +43,8 @@ y están desactivados por defecto. Los ajustes de Serpantinum declarados en Nix,
 como la pantalla nocturna desactivada, son valores iniciales: se aplican la
 primera vez o cuando cambian en Nix, y lo que cambies desde el shell se conserva.
 En `desktop`, el panel usa siempre el modo de brillo directo de AMD.
+En `desktop`, Bluetooth reconecta los dispositivos emparejados y de confianza
+desde el arranque, también en SDDM, y respeta las desconexiones manuales.
 SDDM usa el tema astronaut y `~/Imágenes/Fondos/login.jpg`, inicializado
 desde `assets/login.jpg`. Los fondos de `~/Imágenes/Fondos` son reemplazables.
 
