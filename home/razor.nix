@@ -29,9 +29,7 @@
       fnm
       python3
       uv
-      # rustup tracks upstream releases; nixpkgs lags behind them.
       rustup
-      # Native extensions and Rust crates need a compiler and linker.
       clang
       gnumake
       pkg-config
@@ -84,7 +82,6 @@
 
   programs = {
     gh.enable = true;
-    # Pin the LTS explicitly; the unversioned temurin-bin alias trails it.
     java = {
       enable = true;
       package = pkgs.temurin-bin-25;
