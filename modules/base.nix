@@ -192,16 +192,22 @@ in
     # fnm downloads upstream Node binaries that use the standard Linux loader.
     nix-ld = {
       enable = true;
-      # X11, font and PulseAudio libraries for prebuilt desktop binaries.
+      # X11, font, audio and graphics libraries for prebuilt desktop binaries.
       libraries = with pkgs; [
         libx11
         libxext
         libxrender
         libxtst
         libxi
+        libxrandr
+        libxcursor
+        libxcomposite
         freetype
         fontconfig
         libpulseaudio
+        vulkan-loader
+        libglvnd
+        gnutls
       ];
     };
     hyprland = {
